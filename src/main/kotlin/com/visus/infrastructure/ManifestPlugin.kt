@@ -37,6 +37,10 @@ import com.visus.infrastructure.extension.checkValueTrulyExists
  *  @author Tobias Hahnen
  *
  *  Plugin to create specific manifest attributes. Allows use to add / overwrite custom attributes.
+ *
+ *  TODO: Allow overwriting properties using environment variables / system properties.
+ *  TODO: Add "patch.jar" to patch every JAR archive with specific properties.
+ *  TODO: Add "patch.war" to patch every WAR archive with specific properties.
  */
 open class ManifestPlugin : Plugin<Project> {
     companion object {
@@ -289,10 +293,10 @@ open class ManifestPlugin : Plugin<Project> {
             handleSimpleEntry(CreatedBy,
                               "${System.getProperty("java.runtime.version")} (${System.getProperty("java.vendor")})",
                               manifest, gradleProperties)
-            handleSimpleEntry(Permissions, "all-permissions", manifest, gradleProperties)
-            handleSimpleEntry(Codebase, "*", manifest, gradleProperties)
 
             // 5) Other properties (not based on released value)
+            handleEasyEntry(Permissions, "all-permissions", manifest, gradleProperties)
+            handleEasyEntry(Codebase, "*", manifest, gradleProperties)
             listOf(ApplicationName, PROP_PRODUCT_NAME).forEach {
                 handleEasyEntry(it, target.name, manifest, gradleProperties)
             }

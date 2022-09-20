@@ -21,7 +21,8 @@ import org.gradle.api.internal.project.DefaultProject
 import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.WarPlugin
-import org.gradle.jvm.tasks.Jar
+import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.bundling.War
 import org.gradle.testfixtures.ProjectBuilder
 import org.gradle.util.GradleVersion
 
@@ -97,7 +98,7 @@ open class ManifestPluginTest {
         project.pluginManager.apply(ManifestPlugin::class.java)
         project.evaluate()
 
-        // get main Jar task
+        // get main Jar task attributes
         val attributes = (project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar).manifest.attributes
         Assert.assertTrue(attributes.size >= 7)
         Assert.assertTrue(attributes.containsKey("Manifest-Version"))
@@ -126,7 +127,7 @@ open class ManifestPluginTest {
         project.pluginManager.apply(ManifestPlugin::class.java)
         project.evaluate()
 
-        // get main Jar task
+        // get main Jar task attributes
         val attributes = (project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar).manifest.attributes
         Assert.assertTrue(attributes.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
         Assert.assertEquals(GradleVersion.current().version, attributes[ManifestPlugin.PROP_PRODUCT_VERSION])
@@ -150,7 +151,7 @@ open class ManifestPluginTest {
         project.pluginManager.apply(ManifestPlugin::class.java)
         project.evaluate()
 
-        // get main Jar task
+        // get main Jar task attributes
         val attributes = (project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar).manifest.attributes
         Assert.assertTrue(attributes.containsKey("PROP_USER_NAME"))
         Assert.assertEquals("hahnen", attributes["PROP_USER_NAME"])
@@ -176,7 +177,7 @@ open class ManifestPluginTest {
         project.pluginManager.apply(ManifestPlugin::class.java)
         project.evaluate()
 
-        // get main Jar task
+        // get main Jar task attributes
         val attributes = (project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar).manifest.attributes
         Assert.assertTrue(attributes.containsKey(ManifestPlugin.PROP_PRODUCT_RELEASED))
         Assert.assertEquals("true", attributes[ManifestPlugin.PROP_PRODUCT_RELEASED])
@@ -194,7 +195,98 @@ open class ManifestPluginTest {
     }
 
 
-    // TODO: Add more evaluation tests using special configurations and real project extensions!
+    /** 8) Evaluate using project extension and overwritten properties from gradle.properties */
+    @Test fun test_Evaluate_ExtensionOverwrittenProperties() {
+        val project = ProjectBuilder.builder().build()
+
+        // emulate project extension & gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(
+            project.name, mapOf(
+                "version" to "1.2.3.4",
+                "rc" to "RC01",
+                "released" to false,
+                "udi_eu" to "0123456789abcdef",
+                "udi_usa" to "fedcba9876543210",
+                "vendor" to "VISUS Health IT GmbH"
+            )
+        )
+        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.PROP_PRODUCT_VERSION}", "")
+        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.PROP_PRODUCT_RC}", "RC02")
+        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.MainClass}", "com.visus.infrastructure.Main")
+
+        // apply JavaPlugin (required) / WarPlugin (optional) / ManifestPlugin & evaluate
+        project.pluginManager.apply(JavaPlugin::class.java)
+        project.pluginManager.apply(WarPlugin::class.java)
+        project.pluginManager.apply(ManifestPlugin::class.java)
+        project.evaluate()
+
+        // get main Jar task attributes
+        val jarAttributes = (project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar).manifest.attributes
+        Assert.assertFalse(jarAttributes.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertTrue(jarAttributes.containsKey(ManifestPlugin.PROP_PRODUCT_RC))
+        Assert.assertEquals("RC02", jarAttributes[ManifestPlugin.PROP_PRODUCT_RC])
+        Assert.assertTrue(jarAttributes.containsKey(ManifestPlugin.MainClass))
+        Assert.assertEquals("com.visus.infrastructure.Main", jarAttributes[ManifestPlugin.MainClass])
+        Assert.assertTrue(jarAttributes.containsKey(ManifestPlugin.PROP_PRODUCT_RELEASED))
+        Assert.assertEquals("false", jarAttributes[ManifestPlugin.PROP_PRODUCT_RELEASED])
+        Assert.assertTrue(jarAttributes.containsKey(ManifestPlugin.PROP_UNIQUE_DEVICE_IDENTIFICATION_EU))
+        Assert.assertEquals("0123456789abcdef", jarAttributes[ManifestPlugin.PROP_UNIQUE_DEVICE_IDENTIFICATION_EU])
+        Assert.assertTrue(jarAttributes.containsKey(ManifestPlugin.PROP_UNIQUE_DEVICE_IDENTIFICATION_USA))
+        Assert.assertEquals("fedcba9876543210", jarAttributes[ManifestPlugin.PROP_UNIQUE_DEVICE_IDENTIFICATION_USA])
+        Assert.assertTrue(jarAttributes.containsKey(ManifestPlugin.PROP_VENDOR_NAME))
+        Assert.assertEquals("VISUS Health IT GmbH", jarAttributes[ManifestPlugin.PROP_VENDOR_NAME])
+
+        // get main War task attributes
+        val warAttributes = (project.tasks.getByName(WarPlugin.WAR_TASK_NAME) as War).manifest.attributes
+        Assert.assertFalse(warAttributes.containsKey(ManifestPlugin.MainClass))
+    }
+
+
+    /** 9) Evaluate using different project extension name */
+    @Test fun test_Evaluate_DifferentExtensionName() {
+        val project = ProjectBuilder.builder().build()
+
+        // emulate project extension & gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(
+            "differentName", mapOf(
+                "version" to "1.2.3.4"
+            )
+        )
+        propertiesExtension.set(ManifestPlugin.KEY_EXTENSION, "differentName")
+
+        // apply JavaPlugin (required) / ManifestPlugin & evaluate
+        project.pluginManager.apply(JavaPlugin::class.java)
+        project.pluginManager.apply(ManifestPlugin::class.java)
+        project.evaluate()
+
+        // get main Jar task attributes
+        val attributes = (project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar).manifest.attributes
+        Assert.assertTrue(attributes.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals("1.2.3.4", attributes[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 10) Evaluate overwriting "Permissions" and "Codebase" attributes */
+    @Test fun test_Evaluate_OverwritePermissionsCodebase() {
+        val project = ProjectBuilder.builder().build()
+
+        // emulate gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.Permissions}", "")
+        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.Codebase}", "")
+
+        // apply JavaPlugin (required) / ManifestPlugin & evaluate
+        project.pluginManager.apply(JavaPlugin::class.java)
+        project.pluginManager.apply(ManifestPlugin::class.java)
+        project.evaluate()
+
+        // get main Jar task attributes
+        val attributes = (project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar).manifest.attributes
+        Assert.assertFalse(attributes.containsKey(ManifestPlugin.Permissions))
+        Assert.assertFalse(attributes.containsKey(ManifestPlugin.Codebase))
+    }
 }
 
 

@@ -7,7 +7,6 @@
 
 /** 1) Plugins used globally */
 plugins {
-    groovy
     jacoco
 
     `java-gradle-plugin`
@@ -15,9 +14,8 @@ plugins {
     `maven-publish`
 
     id("org.jetbrains.kotlin.jvm") version "1.4.20"
-    id("com.gradle.plugin-publish") version "0.14.0"
+    id("com.gradle.plugin-publish") version "1.0.0"
     id("org.sonarqube") version "3.4.0.2513"
-    id("com.autonomousapps.dependency-analysis") version "1.1.0"
 }
 
 
