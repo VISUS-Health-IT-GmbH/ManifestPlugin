@@ -16,7 +16,7 @@ import org.gradle.api.InvalidUserDataException
 
 
 /**
- *  Base extension for every extension thrown by this plugin
+ *  Base exception for every exception thrown by this plugin
  *
  *  @author Tobias Hahnen
  */

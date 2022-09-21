@@ -168,7 +168,35 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 13) Check the "ManifestPlugin.handleSimpleEntry" method */
+    /** 13) Check the "ManifestPlugin.getMapping" method: Mainly to check that after a change nothing is untested! */
+    @Test fun test_getMapping() {
+        val project = ProjectBuilder.builder().build()
+
+        val mapping = ManifestPlugin.getMapping(project)
+        Assert.assertEquals(12, mapping.size)
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.GradleVersion))
+        Assert.assertEquals(project.gradle.gradleVersion, mapping[ManifestPlugin.GradleVersion])
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.CreatedBy))
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.Permissions))
+        Assert.assertEquals("all-permissions", mapping[ManifestPlugin.Permissions])
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.Codebase))
+        Assert.assertEquals("*", mapping[ManifestPlugin.Codebase])
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.ApplicationName))
+        Assert.assertEquals(project.name, mapping[ManifestPlugin.ApplicationName])
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_PRODUCT_NAME))
+        Assert.assertEquals(project.name, mapping[ManifestPlugin.PROP_PRODUCT_NAME])
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals(project.version, mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_RELEASE_DATE))
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_RELEASE_DATE_yyMMdd))
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_BUILD_USER))
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_BUILD_HOST))
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_BUILD_TIME))
+
+    }
+
+
+    /** 14) Check the "ManifestPlugin.handleSimpleEntry" method */
     @Test fun test_handleSimpleEntry() {
         val manifest = mutableMapOf<String, String>()
         val gradleProperties = mutableMapOf(KEY_NAME to KEY_VALUE) as MutableMap<*, *>
@@ -180,7 +208,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 14) Check the "ManifestPlugin.handleEasyEntry" method: In gradle.properties but not valid */
+    /** 15) Check the "ManifestPlugin.handleEasyEntry" method: In gradle.properties but not valid */
     @Test fun test_handleEasyEntry_inPropertiesButEmpty() {
         val manifest = mutableMapOf<String, String>()
         val gradleProperties = mutableMapOf(KEY_NAME to null) as MutableMap<*, *>
@@ -191,7 +219,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 15) Check the "ManifestPlugin.handleEasyEntry" method: In gradle.properties */
+    /** 16) Check the "ManifestPlugin.handleEasyEntry" method: In gradle.properties */
     @Test fun test_handleEasyEntry_inProperties() {
         val manifest = mutableMapOf<String, String>()
         val gradleProperties = mutableMapOf(KEY_NAME to KEY_VALUE) as MutableMap<*, *>
@@ -203,7 +231,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 14) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties */
+    /** 17) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties */
     @Test fun test_handleEasyEntry_notInProperties() {
         val manifest = mutableMapOf<String, String>()
         val gradleProperties = mutableMapOf<String, String>() as MutableMap<*, *>
@@ -215,7 +243,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 15) Check the "ManifestPlugin.handleDefaultEntry" method: Not in gradle.properties but project extension */
+    /** 18) Check the "ManifestPlugin.handleDefaultEntry" method: Not in gradle.properties but project extension */
     @Test fun test_handleDefaultEntry_notInPropertiesButExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf(KEY_NAME to KEY_VALUE)
@@ -227,7 +255,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 16) Check the "ManifestPlugin.handleDefaultEntry" method: Not in gradle.properties and not project extension */
+    /** 19) Check the "ManifestPlugin.handleDefaultEntry" method: Not in gradle.properties and not project extension */
     @Test fun test_handleDefaultEntry_notInPropertiesNotExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
@@ -238,7 +266,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 17) Check the "ManifestPlugin.handleDefaultEntry" method: In gradle.properties but project extension */
+    /** 20) Check the "ManifestPlugin.handleDefaultEntry" method: In gradle.properties but project extension */
     @Test fun test_handleDefaultEntry_inPropertiesButExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf(KEY_NAME to KEY_VALUE)
@@ -250,7 +278,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 18) Check the "ManifestPlugin.handleDefaultEntry" method: In gradle.properties and not project extension */
+    /** 21) Check the "ManifestPlugin.handleDefaultEntry" method: In gradle.properties and not project extension */
     @Test fun test_handleDefaultEntry_inPropertiesNotExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
@@ -262,7 +290,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 19) Check the "ManifestPlugin.handleVersionEntry" method: In gradle.properties but not valid */
+    /** 22) Check the "ManifestPlugin.handleVersionEntry" method: In gradle.properties but not valid */
     @Test fun test_handleVersionEntry_inPropertiesButEmpty() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
@@ -275,7 +303,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 20) Check the "ManifestPlugin.handleVersionEntry" method: In gradle.properties */
+    /** 23) Check the "ManifestPlugin.handleVersionEntry" method: In gradle.properties */
     @Test fun test_handleVersionEntry_inProperties() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
@@ -289,7 +317,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 21) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties / extension -> unspecified */
+    /** 24) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties / extension -> unspecified */
     @Test fun test_handleEasyEntry_notInPropertiesNotInExtensionAndUnspecified() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
@@ -302,7 +330,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 22) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties / extension -> blank */
+    /** 25) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties / extension -> blank */
     @Test fun test_handleEasyEntry_notInPropertiesNotInExtensionAndBlank() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
@@ -315,7 +343,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 23) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties / extension -> correct */
+    /** 26) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties / extension -> correct */
     @Test fun test_handleEasyEntry_notInPropertiesNotInExtensionAndCorrect() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
@@ -329,7 +357,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 24) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties but in extension */
+    /** 27) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties but in extension */
     @Test fun test_handleEasyEntry_notInPropertiesInExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf(ManifestPlugin.VERSION to "1.2.3.4")

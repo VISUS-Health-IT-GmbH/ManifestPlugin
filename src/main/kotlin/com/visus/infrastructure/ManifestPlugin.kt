@@ -28,6 +28,8 @@ import org.gradle.kotlin.dsl.extra
 import com.visus.infrastructure.exception.JavaPluginMissingException
 import com.visus.infrastructure.extension.checkValuePossiblyExists
 import com.visus.infrastructure.extension.checkValueTrulyExists
+import com.visus.infrastructure.extension.patchManifest
+import com.visus.infrastructure.extension.substituteProperties
 
 
 /**
@@ -38,6 +40,7 @@ import com.visus.infrastructure.extension.checkValueTrulyExists
  *
  *  Plugin to create specific manifest attributes. Allows use to add / overwrite custom attributes.
  *
+ *  TODO: Add property to disable warnings.
  *  TODO: Allow overwriting properties using environment variables / system properties.
  *  TODO: Add "patch.jar" to patch every JAR archive with specific properties.
  *  TODO: Add "patch.war" to patch every WAR archive with specific properties.
@@ -45,11 +48,12 @@ import com.visus.infrastructure.extension.checkValueTrulyExists
 open class ManifestPlugin : Plugin<Project> {
     companion object {
         // identifiers of the properties needed by this plugin
-        internal const val KEY_EXTENSION    = "plugins.manifest.properties.differentExtension"
-        internal const val KEY_PATCH        = "plugins.manifest.properties.patchArchiveAfterwards"
+        internal const val KEY_EXTENSION                            = "plugins.manifest.properties.differentExtension"
+        internal const val KEY_PATCH                                = "plugins.manifest.properties.patchArchives"
 
         // prefix for attributes
-        internal const val prefix = "manifest."
+        internal const val PREFIX_DEFAULT                           = "manifest."
+        internal const val PREFIX_PATCHED                           = "patched.manifest."
 
         // identifiers of default properties
         internal const val GradleVersion                            = "Gradle-Version"
@@ -154,6 +158,29 @@ open class ManifestPlugin : Plugin<Project> {
                 }
             } as Map<*, *>?
         }
+
+
+        /**
+         *  Get mapping of some specific manifest attributes which can be used even though the attributes themselves
+         *  are not provided to manifest file. Black magic fuckery, I know ;)
+         *
+         *  @param target the Gradle project to search for extension
+         *  @return the mapping (cannot be static) but must be created at runtime
+         */
+        internal fun getMapping(target: Project) : Map<String, Any> = mapOf(
+            GradleVersion to target.gradle.gradleVersion,
+            CreatedBy to "${System.getProperty("java.runtime.version")} (${System.getProperty("java.vendor")})",
+            Permissions to "all-permissions",
+            Codebase to "*",
+            ApplicationName to target.name,
+            PROP_PRODUCT_NAME to target.name,
+            PROP_PRODUCT_VERSION to target.version,
+            PROP_RELEASE_DATE to LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
+            PROP_RELEASE_DATE_yyMMdd to LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd")),
+            PROP_BUILD_USER to System.getProperty("user.name"),
+            PROP_BUILD_HOST to InetAddress.getLocalHost().hostName,
+            PROP_BUILD_TIME to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME)
+        )
 
 
         /**
@@ -273,83 +300,59 @@ open class ManifestPlugin : Plugin<Project> {
         }
         val warPluginFound = target.plugins.hasPlugin(WarPlugin::class.java)
 
-        // 2) Get (root) project extension if available
+        // 2) Get (root) project extension if available & mapping
+        //    TODO: Move to "afterEvaluate" block, maybe tests must be fixed
         val extension = getExtension(target)
+        val mappings = getMapping(target)
 
         target.afterEvaluate {
+            // all properties starting with "manifest."
+            val manifestGradleProperties = target.properties.filter { it.key.startsWith(PREFIX_DEFAULT) }
+                .mapKeys { it.key.replace(PREFIX_DEFAULT, "") }
+                .toMutableMap()
+            val manifest: MutableMap<String, String> = mutableMapOf()
+
             // 3) Get all tasks based on WAR plugin applied -> there is at least one JAR task after applying Java plugin
             val tasks = when (warPluginFound) {
                 true -> listOf(target.tasks.withType(Jar::class.java), target.tasks.withType(War::class.java))
                 else -> listOf(target.tasks.withType(Jar::class.java))
             }
 
-            // 4) Properties always set
-            val gradleProperties = target.properties.filter { it.key.startsWith(prefix) }
-                .mapKeys {it.key.replace(prefix, "") }
-                .toMutableMap()
-            val manifest: MutableMap<String, String> = mutableMapOf()
-
-            handleSimpleEntry(GradleVersion, target.gradle.gradleVersion, manifest, gradleProperties)
-            handleSimpleEntry(CreatedBy,
-                              "${System.getProperty("java.runtime.version")} (${System.getProperty("java.vendor")})",
-                              manifest, gradleProperties)
-
-            // 5) Other properties (not based on released value)
-            handleEasyEntry(Permissions, "all-permissions", manifest, gradleProperties)
-            handleEasyEntry(Codebase, "*", manifest, gradleProperties)
-            listOf(ApplicationName, PROP_PRODUCT_NAME).forEach {
-                handleEasyEntry(it, target.name, manifest, gradleProperties)
+            // 4) Properties not based on "PROP_PRODUCT_RELEASED"
+            listOf(GradleVersion, CreatedBy, Permissions, Codebase, ApplicationName, PROP_PRODUCT_NAME).forEach {
+                handleEasyEntry(it, mappings[it]!! as String, manifest, manifestGradleProperties)
             }
-            handleVersionEntry(PROP_PRODUCT_VERSION, target.version, manifest, extension, gradleProperties)
-            handleDefaultEntry(PROP_PRODUCT_RC, manifest, RC, extension, gradleProperties)
-            handleDefaultEntry(PROP_PRODUCT_RELEASED, manifest, RELEASED, extension, gradleProperties)
-            handleDefaultEntry(PROP_UNIQUE_DEVICE_IDENTIFICATION_EU, manifest, UDI_EU, extension, gradleProperties)
-            handleDefaultEntry(PROP_UNIQUE_DEVICE_IDENTIFICATION_USA, manifest, UDI_USA, extension, gradleProperties)
-            handleDefaultEntry(PROP_VENDOR_NAME, manifest, VENDOR, extension, gradleProperties)
+            handleVersionEntry(
+                PROP_PRODUCT_VERSION, mappings[PROP_PRODUCT_VERSION]!!, manifest, extension, manifestGradleProperties
+            )
+            handleDefaultEntry(PROP_PRODUCT_RC, manifest, RC, extension, manifestGradleProperties)
+            handleDefaultEntry(PROP_PRODUCT_RELEASED, manifest, RELEASED, extension, manifestGradleProperties)
+            handleDefaultEntry(
+                PROP_UNIQUE_DEVICE_IDENTIFICATION_EU, manifest, UDI_EU, extension, manifestGradleProperties
+            )
+            handleDefaultEntry(
+                PROP_UNIQUE_DEVICE_IDENTIFICATION_USA, manifest, UDI_USA, extension, manifestGradleProperties
+            )
+            handleDefaultEntry(PROP_VENDOR_NAME, manifest, VENDOR, extension, manifestGradleProperties)
 
-            // 6) Other properties (based on released value)
+            // 5) Properties based on "PROP_PRODUCT_RELEASED"
             if (manifest.containsKey(PROP_PRODUCT_RELEASED)
                 && manifest[PROP_PRODUCT_RELEASED].equals("true", ignoreCase = true)) {
-                handleSimpleEntry(PROP_RELEASE_DATE, LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE), manifest,
-                                  gradleProperties)
-                handleSimpleEntry(PROP_RELEASE_DATE_yyMMdd,
-                                  LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd")), manifest,
-                                  gradleProperties)
-            }
-
-            // 7) Other properties (based on released value but also patched)
-            val patchedManifest: MutableMap<String, String> = mutableMapOf()
-            handleSimpleEntry(PROP_BUILD_USER, System.getProperty("user.name"), patchedManifest, gradleProperties)
-            handleSimpleEntry(PROP_BUILD_HOST, InetAddress.getLocalHost().hostName, patchedManifest, gradleProperties)
-            handleSimpleEntry(PROP_BUILD_TIME, LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME),
-                              patchedManifest, gradleProperties)
-
-            // 8) Other properties (starting with "manifest." but not already removed)
-            gradleProperties.forEach { manifest[it.key] = it.value.toString() }
-
-            // 9) Check all properties again and replace ${...} with content
-            // TODO: Also add replacement from all properties not only the ones starting with "manifest."!
-            manifest.forEach { (key, value) ->
-                var nValue = value
-
-                "(?!:.*)(?=(\\\$\\{[^}{\$]*}))(?!:.+)".toRegex().findAll(nValue).map { it.groupValues[1] }.forEach {
-                    when {
-                        manifest.keys.contains(it.replace("\${", "").replace("}", ""))
-                            -> nValue = nValue.replace(it, manifest[it.replace("\${", "").replace("}", "")]!!)
-                    }
+                listOf(
+                    PROP_RELEASE_DATE, PROP_RELEASE_DATE_yyMMdd, PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME
+                ).forEach {
+                    handleSimpleEntry(it, mappings[it]!! as String, manifest, manifestGradleProperties)
                 }
-
-                manifest[key] = nValue
             }
 
-            // 10) Add properties to tasks
+            // 6) Other properties (starting with "manifest." but not already removed) + property substitution
+            manifestGradleProperties.forEach { manifest[it.key] = it.value.toString() }
+            manifest.substituteProperties(mappings)
+
+            // 7) Add properties to tasks
             tasks.forEach {
-                it.forEach {task ->
+                it.forEach { task ->
                     task.manifest.attributes.putAll(manifest)
-                    if (manifest.containsKey(PROP_PRODUCT_RELEASED)
-                        && manifest[PROP_PRODUCT_RELEASED].equals("true", ignoreCase = true)) {
-                        task.manifest.attributes.putAll(patchedManifest)
-                    }
 
                     // Do not add "Main-Class" to any WAR archive!
                     when (task) {
@@ -357,8 +360,28 @@ open class ManifestPlugin : Plugin<Project> {
                     }
                 }
             }
-        }
 
-        // 11) "Patch" task to add patchedManifest (if not already done) after creation of JAR / WAR archives + JIRA_TICKET!
+            // 8) Add "patch.jar" / "patch.war" tasks to patch all archives
+            val patchedManifestGradleProperties = target.properties.filter { it.key.startsWith(PREFIX_PATCHED) }
+                .mapKeys { it.key.replace(PREFIX_PATCHED, "") }
+                .toMutableMap()
+            val patchedManifest: MutableMap<String, String> = mutableMapOf()
+
+            listOf(PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME).forEach {
+                handleSimpleEntry(it, mappings[it]!! as String, patchedManifest, patchedManifestGradleProperties)
+            }
+            patchedManifestGradleProperties.forEach { patchedManifest[it.key] = it.value.toString() }
+            patchedManifest.substituteProperties(mappings, manifest)
+
+            target.tasks.register("patch.archives") {
+                doLast {
+                    tasks.forEach {
+                        it.forEach { task ->
+                            task.patchManifest(patchedManifest)
+                        }
+                    }
+                }
+            }
+        }
     }
 }

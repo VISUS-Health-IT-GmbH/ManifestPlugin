@@ -141,10 +141,14 @@ open class ManifestPluginTest {
         // emulate gradle.properties
         val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
         propertiesExtension.set("Test-Property-Key", "Test-Property-Value")
-        propertiesExtension.set("${ManifestPlugin.prefix}PROP_USER_NAME", "hahnen")
-        propertiesExtension.set("${ManifestPlugin.prefix}PROP_USER_BIRTHDATE", "11.07.1998")
-        propertiesExtension.set("${ManifestPlugin.prefix}PROP_USER_INFO", "\${PROP_USER_NAME}/\${PROP_USER_BIRTHDATE}")
-        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.PROP_PRODUCT_RELEASED}", false)
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}PROP_USER_NAME", "hahnen")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}PROP_USER_BIRTHDATE", "11.07.1998")
+        propertiesExtension.set(
+            "${ManifestPlugin.PREFIX_DEFAULT}PROP_USER_INFO", "\${PROP_USER_NAME}/\${PROP_USER_BIRTHDATE}"
+        )
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}PROP_TEST", "abc \${PROP_BUILD_HOST} def")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}PROP_TEST2", "abc \${PROP_Schnitzel} def")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.PROP_PRODUCT_RELEASED}", false)
 
         // apply JavaPlugin (required) / ManifestPlugin & evaluate
         project.pluginManager.apply(JavaPlugin::class.java)
@@ -159,6 +163,10 @@ open class ManifestPluginTest {
         Assert.assertEquals("11.07.1998", attributes["PROP_USER_BIRTHDATE"])
         Assert.assertTrue(attributes.containsKey("PROP_USER_INFO"))
         Assert.assertEquals("hahnen/11.07.1998", attributes["PROP_USER_INFO"])
+        Assert.assertTrue(attributes.containsKey("PROP_TEST"))
+        Assert.assertEquals("abc ${InetAddress.getLocalHost().hostName} def", attributes["PROP_TEST"])
+        Assert.assertTrue(attributes.containsKey("PROP_TEST2"))
+        Assert.assertEquals("abc \${PROP_Schnitzel} def", attributes["PROP_TEST2"])
         Assert.assertTrue(attributes.containsKey(ManifestPlugin.PROP_PRODUCT_RELEASED))
         Assert.assertEquals("false", attributes[ManifestPlugin.PROP_PRODUCT_RELEASED])
     }
@@ -170,7 +178,7 @@ open class ManifestPluginTest {
 
         // emulate gradle.properties
         val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
-        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.PROP_PRODUCT_RELEASED}", true)
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.PROP_PRODUCT_RELEASED}", true)
 
         // apply JavaPlugin (required) / ManifestPlugin & evaluate
         project.pluginManager.apply(JavaPlugin::class.java)
@@ -211,9 +219,11 @@ open class ManifestPluginTest {
                 "vendor" to "VISUS Health IT GmbH"
             )
         )
-        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.PROP_PRODUCT_VERSION}", "")
-        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.PROP_PRODUCT_RC}", "RC02")
-        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.MainClass}", "com.visus.infrastructure.Main")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.PROP_PRODUCT_VERSION}", "")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.PROP_PRODUCT_RC}", "RC02")
+        propertiesExtension.set(
+            "${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.MainClass}", "com.visus.infrastructure.Main"
+        )
 
         // apply JavaPlugin (required) / WarPlugin (optional) / ManifestPlugin & evaluate
         project.pluginManager.apply(JavaPlugin::class.java)
@@ -274,8 +284,8 @@ open class ManifestPluginTest {
 
         // emulate gradle.properties
         val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
-        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.Permissions}", "")
-        propertiesExtension.set("${ManifestPlugin.prefix}${ManifestPlugin.Codebase}", "")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.Permissions}", "")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.Codebase}", "")
 
         // apply JavaPlugin (required) / ManifestPlugin & evaluate
         project.pluginManager.apply(JavaPlugin::class.java)
@@ -287,6 +297,9 @@ open class ManifestPluginTest {
         Assert.assertFalse(attributes.containsKey(ManifestPlugin.Permissions))
         Assert.assertFalse(attributes.containsKey(ManifestPlugin.Codebase))
     }
+
+
+    /** 11) Evaluate applying the plugin, running JAR (but not WAR) task and patching all the artifacts afterwards */
 }
 
 
