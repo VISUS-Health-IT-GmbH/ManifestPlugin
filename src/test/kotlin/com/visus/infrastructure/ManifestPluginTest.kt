@@ -12,11 +12,14 @@
  */
 package com.visus.infrastructure
 
+import java.io.File
 import java.net.InetAddress
+import java.nio.file.Files
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.api.internal.project.DefaultProject
 import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.api.plugins.JavaPlugin
@@ -27,9 +30,13 @@ import org.gradle.testfixtures.ProjectBuilder
 import org.gradle.util.GradleVersion
 
 import org.junit.Assert
+import org.junit.BeforeClass
 import org.junit.Test
 
+import com.github.stefanbirkner.systemlambda.SystemLambda.restoreSystemProperties
+
 import com.visus.infrastructure.exception.JavaPluginMissingException
+import com.visus.infrastructure.extension.getManifestFileContent
 
 
 /**
@@ -41,6 +48,52 @@ import com.visus.infrastructure.exception.JavaPluginMissingException
  *  jUnit test cases on the ManifestPlugin class
  */
 open class ManifestPluginTest {
+    companion object {
+        // current Gradle project buildDir ($buildDir/classes/kotlin/test) -> 3x parent
+        private val buildDir = File(
+            this::class.java.protectionDomain.codeSource.location.path
+        ).parentFile.parentFile.parentFile
+
+        // test temporary directories
+        private val projectProjectDir1  = File(buildDir, "${ManifestPluginTest::class.simpleName}_1")
+        private val projectBuildDir1    = File(projectProjectDir1, "build")
+        private val projectLibsDir1     = File(projectBuildDir1, "libs")
+
+        private val projectProjectDir2  = File(buildDir, "${ManifestPluginTest::class.simpleName}_2")
+        private val projectBuildDir2    = File(projectProjectDir2, "build")
+        private val projectLibsDir2     = File(projectBuildDir2, "libs")
+
+
+        /** 0) Create temporary directories for tests */
+        @BeforeClass
+        @JvmStatic fun configureTestsuite() {
+            // i) remove directories if exists
+            if (projectProjectDir1.exists() && projectProjectDir1.isDirectory) {
+                Files.walk(projectProjectDir1.toPath())
+                    .sorted(Comparator.reverseOrder())
+                    .map { it.toFile() }
+                    .forEach { it.delete() }
+            }
+
+            if (projectProjectDir2.exists() && projectProjectDir2.isDirectory) {
+                Files.walk(projectProjectDir2.toPath())
+                    .sorted(Comparator.reverseOrder())
+                    .map { it.toFile() }
+                    .forEach { it.delete() }
+            }
+
+            // ii) create directories
+            projectProjectDir1.mkdirs()
+            projectBuildDir1.mkdirs()
+            projectLibsDir1.mkdirs()
+
+            projectProjectDir2.mkdirs()
+            projectBuildDir2.mkdirs()
+            projectLibsDir2.mkdirs()
+        }
+    }
+
+
     /** 1) Test applying the plugin with JavaPlugin not applied */
     @Test fun test_ApplyPlugin_JavaPluginMissing() {
         val project = ProjectBuilder.builder().build()
@@ -300,6 +353,103 @@ open class ManifestPluginTest {
 
 
     /** 11) Evaluate applying the plugin, running JAR (but not WAR) task and patching all the artifacts afterwards */
+    @Test fun test_Evaluate_PatchJarManifestAttributes() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir1).build()
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set("${ManifestPlugin.PREFIX_PATCHED}Resources-Project-Version", "\${PROP_PRODUCT_VERSION}")
+
+        restoreSystemProperties {
+            System.setProperty(ManifestPlugin.SYS_TICKET, "VISUS-1234")
+
+            // apply JavaPlugin (required) / ManifestPlugin & evaluate
+            project.pluginManager.apply(JavaPlugin::class.java)
+            project.pluginManager.apply(ManifestPlugin::class.java)
+            project.evaluate()
+
+            // get main Jar task & emulate running task
+            val task = project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar
+            task.actions.forEach {
+                it.execute(task)
+            }
+
+            // check not yet patched JAR archive artefact manifest file
+            var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertFalse(content.contains("Resources-Project-Version: "))
+
+            // get "patch.archives" task & emulate running task
+            val patchTask = project.tasks.findByName(ManifestPlugin.TASK_NAME) as Task
+            patchTask.actions.forEach {
+                it.execute(patchTask)
+            }
+
+            // check patched JAR archive artefact manifest file
+            content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertTrue(
+                content.contains(
+                    "Resources-Project-Version: ${project.version}.${System.getProperty(ManifestPlugin.SYS_TICKET)}"
+                )
+            )
+        }
+    }
+
+
+    /** 12) Evaluate applying the plugin, running WAR (but not JAR) task but patching no version property */
+    @Test fun test_Evaluate_PatchWarManifestAttributes() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir1).build()
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set("${ManifestPlugin.PREFIX_PATCHED}Resources-Project-Version", "\${PROP_PRODUCT_VERSION}")
+
+        // apply JavaPlugin (required) / WarPlugin (optional) / ManifestPlugin & evaluate
+        project.pluginManager.apply(WarPlugin::class.java)
+        project.pluginManager.apply(ManifestPlugin::class.java)
+        project.evaluate()
+
+        // get main War task & emulate running task
+        val task = project.tasks.getByName(WarPlugin.WAR_TASK_NAME) as War
+        task.actions.forEach {
+            it.execute(task)
+        }
+
+        // check not yet patched WAR archive artefact manifest file
+        var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+        Assert.assertFalse(content.contains("Resources-Project-Version: "))
+
+        // get "patch.archives" task & emulate running task
+        val patchTask = project.tasks.findByName(ManifestPlugin.TASK_NAME) as Task
+        patchTask.actions.forEach {
+            it.execute(patchTask)
+        }
+
+        // check patched WAR archive artefact manifest file
+        content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+        Assert.assertTrue(
+            content.contains("Resources-Project-Version: ${project.version}")
+        )
+    }
+
+
+    /** 13) Evaluate applying the plugin with setting gradle property to patch archives explicitly to false */
+    @Test fun test_Evaluate_DoNotPatch() {
+        val project = ProjectBuilder.builder().build()
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, false)
+
+        // apply JavaPlugin (required) / ManifestPlugin & evaluate
+        project.pluginManager.apply(JavaPlugin::class.java)
+        project.pluginManager.apply(ManifestPlugin::class.java)
+        project.evaluate()
+
+        // assert patch task does not exit because gradle property set to "false"
+        Assert.assertNull(project.tasks.findByName(ManifestPlugin.TASK_NAME))
+    }
 }
 
 

@@ -26,6 +26,7 @@ import org.gradle.api.tasks.bundling.War
 import org.gradle.kotlin.dsl.extra
 
 import com.visus.infrastructure.exception.JavaPluginMissingException
+import com.visus.infrastructure.extension.isTrue
 import com.visus.infrastructure.extension.checkValuePossiblyExists
 import com.visus.infrastructure.extension.checkValueTrulyExists
 import com.visus.infrastructure.extension.patchManifest
@@ -42,14 +43,18 @@ import com.visus.infrastructure.extension.substituteProperties
  *
  *  TODO: Add property to disable warnings.
  *  TODO: Allow overwriting properties using environment variables / system properties.
- *  TODO: Add "patch.jar" to patch every JAR archive with specific properties.
- *  TODO: Add "patch.war" to patch every WAR archive with specific properties.
  */
 open class ManifestPlugin : Plugin<Project> {
     companion object {
         // identifiers of the properties needed by this plugin
         internal const val KEY_EXTENSION                            = "plugins.manifest.properties.differentExtension"
         internal const val KEY_PATCH                                = "plugins.manifest.properties.patchArchives"
+
+        // system property used for patching PROP_PRODUCT_VERSION (currently Jira tickets only)
+        internal const val SYS_TICKET                               = "JIRA_TICKET"
+
+        // task name for patching archive artifacts
+        internal const val TASK_NAME                                = "patch.archives"
 
         // prefix for attributes
         internal const val PREFIX_DEFAULT                           = "manifest."
@@ -303,13 +308,13 @@ open class ManifestPlugin : Plugin<Project> {
         // 2) Get (root) project extension if available & mapping
         //    TODO: Move to "afterEvaluate" block, maybe tests must be fixed
         val extension = getExtension(target)
-        val mappings = getMapping(target)
+        var mappings = getMapping(target)
 
         target.afterEvaluate {
             // all properties starting with "manifest."
             val manifestGradleProperties = target.properties.filter { it.key.startsWith(PREFIX_DEFAULT) }
-                .mapKeys { it.key.replace(PREFIX_DEFAULT, "") }
-                .toMutableMap()
+                                            .mapKeys { it.key.replace(PREFIX_DEFAULT, "") }
+                                            .toMutableMap()
             val manifest: MutableMap<String, String> = mutableMapOf()
 
             // 3) Get all tasks based on WAR plugin applied -> there is at least one JAR task after applying Java plugin
@@ -361,23 +366,33 @@ open class ManifestPlugin : Plugin<Project> {
                 }
             }
 
-            // 8) Add "patch.jar" / "patch.war" tasks to patch all archives
-            val patchedManifestGradleProperties = target.properties.filter { it.key.startsWith(PREFIX_PATCHED) }
-                .mapKeys { it.key.replace(PREFIX_PATCHED, "") }
-                .toMutableMap()
-            val patchedManifest: MutableMap<String, String> = mutableMapOf()
+            // 8) Add "patch.archives" task to patch all archives if gradle property is set
+            if (target.properties.containsKey(KEY_PATCH) && target.properties[KEY_PATCH]!!.isTrue()) {
+                val patchedManifestGradleProperties = target.properties.filter { it.key.startsWith(PREFIX_PATCHED) }
+                                                        .mapKeys { it.key.replace(PREFIX_PATCHED, "") }
+                                                        .toMutableMap()
+                val patchedManifest: MutableMap<String, String> = mutableMapOf();
 
-            listOf(PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME).forEach {
-                handleSimpleEntry(it, mappings[it]!! as String, patchedManifest, patchedManifestGradleProperties)
-            }
-            patchedManifestGradleProperties.forEach { patchedManifest[it.key] = it.value.toString() }
-            patchedManifest.substituteProperties(mappings, manifest)
+                // INFO: Patching "PROP_PRODUCT_VERSION" using Jira ticket id if found
+                if (target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().isPresent) {
+                    val mappingsEditable = mappings.toMutableMap()
+                    mappingsEditable[PROP_PRODUCT_VERSION] = "${mappingsEditable[PROP_PRODUCT_VERSION]}." +
+                            target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().get()
+                    mappings = mappingsEditable
+                }
 
-            target.tasks.register("patch.archives") {
-                doLast {
-                    tasks.forEach {
-                        it.forEach { task ->
-                            task.patchManifest(patchedManifest)
+                listOf(PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME).forEach {
+                    handleSimpleEntry(it, mappings[it]!! as String, patchedManifest, patchedManifestGradleProperties)
+                }
+                patchedManifestGradleProperties.forEach { patchedManifest[it.key] = it.value.toString() }
+                patchedManifest.substituteProperties(mappings, manifest)
+
+                target.tasks.register(TASK_NAME) {
+                    doLast {
+                        tasks.forEach {
+                            it.forEach { task ->
+                                task.patchManifest(patchedManifest)
+                            }
                         }
                     }
                 }
