@@ -26,9 +26,10 @@ import org.gradle.api.tasks.bundling.War
 import org.gradle.kotlin.dsl.extra
 
 import com.visus.infrastructure.exception.JavaPluginMissingException
-import com.visus.infrastructure.extension.isTrue
 import com.visus.infrastructure.extension.checkValuePossiblyExists
 import com.visus.infrastructure.extension.checkValueTrulyExists
+import com.visus.infrastructure.extension.isTrue
+import com.visus.infrastructure.extension.overwriteEnvironmentVariablesSystemProperty
 import com.visus.infrastructure.extension.patchManifest
 import com.visus.infrastructure.extension.substituteProperties
 
@@ -42,7 +43,6 @@ import com.visus.infrastructure.extension.substituteProperties
  *  Plugin to create specific manifest attributes. Allows use to add / overwrite custom attributes.
  *
  *  TODO: Add property to disable warnings.
- *  TODO: Allow overwriting properties using environment variables / system properties.
  */
 open class ManifestPlugin : Plugin<Project> {
     companion object {
@@ -351,7 +351,10 @@ open class ManifestPlugin : Plugin<Project> {
             }
 
             // 6) Other properties (starting with "manifest." but not already removed) + property substitution
-            manifestGradleProperties.forEach { manifest[it.key] = it.value.toString() }
+            manifestGradleProperties.forEach { when {
+                it.value.toString().isNotBlank() -> manifest[it.key] = it.value.toString()
+            } }
+            manifest.overwriteEnvironmentVariablesSystemProperty(PREFIX_DEFAULT)
             manifest.substituteProperties(mappings)
 
             // 7) Add properties to tasks
@@ -384,7 +387,10 @@ open class ManifestPlugin : Plugin<Project> {
                 listOf(PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME).forEach {
                     handleSimpleEntry(it, mappings[it]!! as String, patchedManifest, patchedManifestGradleProperties)
                 }
-                patchedManifestGradleProperties.forEach { patchedManifest[it.key] = it.value.toString() }
+                patchedManifestGradleProperties.forEach { when {
+                    it.value.toString().isNotBlank() -> patchedManifest[it.key] = it.value.toString()
+                } }
+                patchedManifest.overwriteEnvironmentVariablesSystemProperty(PREFIX_PATCHED)
                 patchedManifest.substituteProperties(mappings, manifest)
 
                 target.tasks.register(TASK_NAME) {

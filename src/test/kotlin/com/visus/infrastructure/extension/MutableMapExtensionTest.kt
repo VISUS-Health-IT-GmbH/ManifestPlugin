@@ -15,6 +15,11 @@ package com.visus.infrastructure.extension
 import org.junit.Assert
 import org.junit.Test
 
+import com.github.stefanbirkner.systemlambda.SystemLambda.restoreSystemProperties
+import com.github.stefanbirkner.systemlambda.SystemLambda.withEnvironmentVariable
+
+import com.visus.infrastructure.ManifestPlugin
+
 
 /**
  *  MutableMapExtensionTest:
@@ -62,5 +67,47 @@ open class MutableMapExtensionTest {
         Assert.assertEquals("inMapping", extension["PROP_TEST3"])
         Assert.assertEquals("inOther", extension["PROP_TEST4"])
         Assert.assertEquals("\${PROP_NOT_MAPPED}", extension["PROP_TEST5"])
+    }
+
+
+    /** 3) Check the "MutableMap<String, String>.overwriteEnvironmentVariablesSystemProperty" method: nothing */
+    @Test fun test_overwriteEnvironmentVariablesSystemProperty_noEnvironmentVariablesNoSystemProperties() {
+        val map = mutableMapOf("start" to "finish")
+
+        map.overwriteEnvironmentVariablesSystemProperty()
+
+        Assert.assertTrue(map.containsKey("start"))
+        Assert.assertEquals("finish", map["start"])
+    }
+
+
+    /** 4) Check the "MutableMap<String, String>.overwriteEnvironmentVariablesSystemProperty" method: env variable */
+    @Test fun test_overwriteEnvironmentVariablesSystemProperty_EnvironmentVariablesNoSystemProperties() {
+        val map = mutableMapOf("start" to "finish")
+
+        withEnvironmentVariable("${ManifestPlugin.PREFIX_DEFAULT}start", "motor").execute {
+            Assert.assertTrue(System.getenv().containsKey("${ManifestPlugin.PREFIX_DEFAULT}start"))
+
+            map.overwriteEnvironmentVariablesSystemProperty(ManifestPlugin.PREFIX_DEFAULT)
+
+            Assert.assertTrue(map.containsKey("start"))
+            Assert.assertEquals("motor", map["start"])
+        }
+    }
+
+
+    /** 5) Check the "MutableMap<String, String>.overwriteEnvironmentVariablesSystemProperty" method: sys property */
+    @Test fun test_overwriteEnvironmentVariablesSystemProperty_noEnvironmentVariablesSystemProperties() {
+        val map = mutableMapOf("start" to "finish")
+
+        restoreSystemProperties {
+            System.setProperty("${ManifestPlugin.PREFIX_DEFAULT}start", "computer")
+            Assert.assertTrue(System.getProperties().containsKey("${ManifestPlugin.PREFIX_DEFAULT}start"))
+
+            map.overwriteEnvironmentVariablesSystemProperty(ManifestPlugin.PREFIX_DEFAULT)
+
+            Assert.assertTrue(map.containsKey("start"))
+            Assert.assertEquals("computer", map["start"])
+        }
     }
 }

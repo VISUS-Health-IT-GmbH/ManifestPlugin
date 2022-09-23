@@ -89,3 +89,29 @@ value. The plugin tries to substitute all property keys found, denoted with *${.
 manifest attributes as well as the patched manifest attributes! It reads directly from the Gradle properties but can
 only find properties starting with the prefix "manifest." (for non patched archive artifacts) and properties starting
 with the prefix "manifest." or "patched.manifest." (for patched archive artifacts).
+
+### Overwriting manifest attributes / Gradle properties
+
+Using environment variables or system properties the manifest attributes / Gradle properties can be overwritten. Here as
+an example: The following gradle.properties file disables the PROP_PRODUCT_VERSION manifest attribute, but you want to
+set in the patched archive artifact manifest.
+
+```properties
+# Disable PROP_PRODUCT_VERSION in default archive manifest
+manifest.PROP_PRODUCT_VERSION=
+```
+
+Also, you want another attribute in the patched archive artifact manifest which cannot be set from Gradle but only from
+externally (e.g. shell), then you must run the following command (here for a JAR archive artifact) with either
+environment variables or system properties set:
+
+```shell
+gradlew.bat jar patch.archives -Dpatched.manifest.PROP_PRODUCT_VERSION=%VERSION_FROM_WINDOWS% -Ppatched.manifest.NewAttribute=xyz
+```
+
+Notice the prefix used! You can use both prefixes to overwrite the manifest attributes / Gradle properties to either
+change the default manifest attributes or the patched ones!
+
+**WARNING**: It is not possible to overwrite manifest attributes already set in non-patched archive artifact! The logic
+for patching the archives manifest files uses the standard *jar* command of the specific JDK which only allows to append
+manifest attributes but not to overwrite existing ones!

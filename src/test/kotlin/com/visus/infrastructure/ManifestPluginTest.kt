@@ -34,6 +34,7 @@ import org.junit.BeforeClass
 import org.junit.Test
 
 import com.github.stefanbirkner.systemlambda.SystemLambda.restoreSystemProperties
+import com.github.stefanbirkner.systemlambda.SystemLambda.withEnvironmentVariable
 
 import com.visus.infrastructure.exception.JavaPluginMissingException
 import com.visus.infrastructure.extension.getManifestFileContent
@@ -63,6 +64,10 @@ open class ManifestPluginTest {
         private val projectBuildDir2    = File(projectProjectDir2, "build")
         private val projectLibsDir2     = File(projectBuildDir2, "libs")
 
+        private val projectProjectDir3  = File(buildDir, "${ManifestPluginTest::class.simpleName}_3")
+        private val projectBuildDir3    = File(projectProjectDir3, "build")
+        private val projectLibsDir3     = File(projectBuildDir3, "libs")
+
 
         /** 0) Create temporary directories for tests */
         @BeforeClass
@@ -82,6 +87,13 @@ open class ManifestPluginTest {
                     .forEach { it.delete() }
             }
 
+            if (projectProjectDir3.exists() && projectProjectDir3.isDirectory) {
+                Files.walk(projectProjectDir3.toPath())
+                    .sorted(Comparator.reverseOrder())
+                    .map { it.toFile() }
+                    .forEach { it.delete() }
+            }
+
             // ii) create directories
             projectProjectDir1.mkdirs()
             projectBuildDir1.mkdirs()
@@ -90,6 +102,10 @@ open class ManifestPluginTest {
             projectProjectDir2.mkdirs()
             projectBuildDir2.mkdirs()
             projectLibsDir2.mkdirs()
+
+            projectProjectDir3.mkdirs()
+            projectBuildDir3.mkdirs()
+            projectLibsDir3.mkdirs()
         }
     }
 
@@ -449,6 +465,53 @@ open class ManifestPluginTest {
 
         // assert patch task does not exit because gradle property set to "false"
         Assert.assertNull(project.tasks.findByName(ManifestPlugin.TASK_NAME))
+    }
+
+
+    /** 14) Evaluate applying the plugin, running WAR (but not JAR) task but patching with overwritten attribute */
+    @Test fun test_Evaluate_OverwritePatchedAttributes() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir3).build()
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}Resources-Project-Name", "")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.PROP_PRODUCT_VERSION}", "")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_PATCHED}abcdef", "")
+
+        withEnvironmentVariable(
+            "${ManifestPlugin.PREFIX_PATCHED}Resources-Project-Version", "NOVERSION"
+        ).and(
+            "${ManifestPlugin.PREFIX_PATCHED}${ManifestPlugin.PROP_PRODUCT_VERSION}", "VERSION123"
+        ).execute {
+            // apply JavaPlugin (required) / WarPlugin (optional) / ManifestPlugin & evaluate
+            project.pluginManager.apply(WarPlugin::class.java)
+            project.pluginManager.apply(ManifestPlugin::class.java)
+            project.evaluate()
+
+            // get main War task & emulate running task
+            val task = project.tasks.getByName(WarPlugin.WAR_TASK_NAME) as War
+            task.actions.forEach {
+                it.execute(task)
+            }
+
+            // check not yet patched WAR archive artefact manifest file
+            var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}")
+                            .getManifestFileContent()
+            Assert.assertFalse(content.contains("Resources-Project-Name: "))
+            Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: "))
+
+            // get "patch.archives" task & emulate running task
+            val patchTask = project.tasks.findByName(ManifestPlugin.TASK_NAME) as Task
+            patchTask.actions.forEach {
+                it.execute(patchTask)
+            }
+
+            // check patched WAR archive artefact manifest file
+            content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertTrue(content.contains("Resources-Project-Version: NOVERSION"))
+            Assert.assertTrue(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: VERSION123"))
+        }
     }
 }
 

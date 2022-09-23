@@ -43,3 +43,41 @@ internal fun MutableMap<String, String>.substituteProperties(mapping: Map<String
         this[key] = nValue
     }
 }
+
+
+/**
+ *  Extension to MutableMap<String, String> to overwrite map entries with environment variables or system properties if
+ *  found, otherwise does nothing. System properties / environment variables will be added later if not already used.
+ *
+ *  @param prefix possible prefix in environment variables or system properties, defaults to no prefix
+ */
+internal fun MutableMap<String, String>.overwriteEnvironmentVariablesSystemProperty(prefix: String = "") {
+    // i) get all environment variables starting with this prefix
+    val prefixEnvironmentVariables = System.getenv().filter { it.key.startsWith(prefix) }
+                                        .mapKeys { it.key.replace(prefix, "") }
+                                        .toMutableMap()
+
+    // ii) get all system properties starting with this prefix
+    val prefixSystemProperties = System.getProperties().filter { (it.key as String).startsWith(prefix) }
+                                    .mapKeys { (it.key as String).replace(prefix, "") }
+                                    .toMutableMap()
+
+    // iii) replace all keys in map with environment variable / system property if found
+    this.forEach { (key, _) ->
+        if (prefixEnvironmentVariables.containsKey(key)) {
+            this[key] = prefixEnvironmentVariables[key] as String
+            prefixEnvironmentVariables.remove(key)
+            prefixSystemProperties.remove(key)
+        } else if (prefixSystemProperties.containsKey(key)) {
+            this[key] = prefixSystemProperties[key] as String
+            prefixSystemProperties.remove(key)
+        }
+    }
+
+    // iv) remove all system properties already set as environment variables and add everything to map
+    prefixEnvironmentVariables.forEach { (key, value) ->
+        this[key] = value
+        prefixSystemProperties.remove(key)
+    }
+    prefixSystemProperties.forEach { (key, value) -> this[key] = value as String }
+}
