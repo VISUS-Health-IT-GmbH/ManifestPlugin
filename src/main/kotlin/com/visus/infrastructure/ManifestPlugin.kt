@@ -42,7 +42,7 @@ import com.visus.infrastructure.extension.substituteProperties
  *
  *  Plugin to create specific manifest attributes. Allows use to add / overwrite custom attributes.
  *
- *  TODO: Add property to disable warnings.
+ *  TODO: Add property to disable warnings. Also in JarExtension!
  */
 open class ManifestPlugin : Plugin<Project> {
     companion object {
@@ -236,7 +236,7 @@ open class ManifestPlugin : Plugin<Project> {
          *  @param extension abstraction of the project extension
          *  @param gradleProperties project properties
          *
-         *  TODO: manifestKey / extensionKey is not the same yet!
+         *  INFO: manifestKey / extensionKey is not the same yet!
          */
         internal fun handleDefaultEntry(manifestKey: String, manifest: MutableMap<String, String>, extensionKey: String,
                                         extension: Map<*, *>?, gradleProperties: MutableMap<*, *>) = with(manifestKey) {
@@ -306,7 +306,7 @@ open class ManifestPlugin : Plugin<Project> {
         val warPluginFound = target.plugins.hasPlugin(WarPlugin::class.java)
 
         // 2) Get (root) project extension if available & mapping
-        //    TODO: Move to "afterEvaluate" block, maybe tests must be fixed
+        //    INFO: Should be moved to "afterEvaluate" block, maybe tests must be fixed!
         val extension = getExtension(target)
         var mappings = getMapping(target)
 

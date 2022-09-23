@@ -22,8 +22,6 @@ import com.visus.infrastructure.exception.JarPatchingFailedException
  *  Extension to Jar to patch the manifest attributes with additional ones
  *
  *  @param attributes the additional attributes to add to JAR archive artifact
- *
- *  TODO: ManifestPlugin -> property to disable warnings
  */
 internal fun Jar.patchManifest(attributes: Map<String, String>) {
     // i) all necessary and reused variables
