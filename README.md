@@ -12,7 +12,7 @@ attributes.
 ## Usage
 
 To find out how to apply this plugin to your Gradle project see the information over at the
-[Gradle Plugin Portal](https://plugins.gradle.org/plugin/com.visus.infrastructure.manifest)!
+[Gradle Plugin Portal](https://plugins.gradle.org/plugin/com.visus.infrastructure.vmanifest)!
 
 ## Configuration
 
@@ -115,3 +115,9 @@ change the default manifest attributes or the patched ones!
 **WARNING**: It is not possible to overwrite manifest attributes already set in non-patched archive artifact! The logic
 for patching the archives manifest files uses the standard *jar* command of the specific JDK which only allows to append
 manifest attributes but not to overwrite existing ones!
+
+## What's up with the plugin id?
+
+Q: Why is the plugin id *com.visus.infrastructure.vmanifest*? \
+A: Because the Gradle plugin portal is sometimes buggy and refused the id *com.visus.infrastructure.manifest* even
+though no plugin exists with this id (some write permissions issue which could not be resolved)!
