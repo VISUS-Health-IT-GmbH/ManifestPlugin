@@ -31,7 +31,17 @@ open class MapExtensionTest {
     }
 
 
-    /** 1) Check the "Map<*, *>.checkValueTrulyExists" method */
+    /** 1) Check the "Map<*, *>.checkValueIsBlank" method */
+    @Test fun test_checkValueIsBlank() {
+        Assert.assertFalse(mapOf<Any, Any>().checkValueIsBlank(KEY_NAME))
+        Assert.assertFalse(mapOf<Any, Any?>(KEY_NAME to null).checkValueIsBlank(KEY_NAME))
+        Assert.assertFalse(mapOf<Any, Any?>(KEY_NAME to "null").checkValueIsBlank(KEY_NAME))
+        Assert.assertTrue(mapOf<Any, Any?>(KEY_NAME to "").checkValueIsBlank(KEY_NAME))
+        Assert.assertTrue(mapOf<Any, Any?>(KEY_NAME to " ").checkValueIsBlank(KEY_NAME))
+    }
+
+
+    /** 2) Check the "Map<*, *>.checkValueTrulyExists" method */
     @Test fun test_checkValueTrulyExists() {
         Assert.assertFalse(mapOf<Any, Any?>().checkValueTrulyExists(KEY_NAME))
         Assert.assertFalse(mapOf<Any, Any?>(KEY_NAME to null).checkValueTrulyExists(KEY_NAME))
@@ -41,7 +51,7 @@ open class MapExtensionTest {
     }
 
 
-    /** 2) Check the "Map<*, *>?.checkValuePossiblyExists" method */
+    /** 3) Check the "Map<*, *>?.checkValuePossiblyExists" method */
     @Test fun test_checkValuePossiblyExists() {
         val emptyMap: Map<*, *>? = null
         Assert.assertFalse(emptyMap.checkValuePossiblyExists(KEY_NAME))

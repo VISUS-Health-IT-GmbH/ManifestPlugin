@@ -26,6 +26,7 @@ import org.gradle.api.tasks.bundling.War
 import org.gradle.kotlin.dsl.extra
 
 import com.visus.infrastructure.exception.JavaPluginMissingException
+import com.visus.infrastructure.extension.checkValueIsBlank
 import com.visus.infrastructure.extension.checkValuePossiblyExists
 import com.visus.infrastructure.extension.checkValueTrulyExists
 import com.visus.infrastructure.extension.isTrue
@@ -43,6 +44,7 @@ import com.visus.infrastructure.extension.substituteProperties
  *  Plugin to create specific manifest attributes. Allows use to add / overwrite custom attributes.
  *
  *  TODO: Add property to disable warnings. Also in JarExtension!
+ *  TODO: Add property to explicitly set PROP_PRODUCT_VERSION in patched archive artifact even if deactivated for normal artifact!
  */
 open class ManifestPlugin : Plugin<Project> {
     companion object {
@@ -172,7 +174,7 @@ open class ManifestPlugin : Plugin<Project> {
          *  @param target the Gradle project to search for extension
          *  @return the mapping (cannot be static) but must be created at runtime
          */
-        internal fun getMapping(target: Project) : Map<String, Any> = mapOf(
+        internal fun getMapping(target: Project) : MutableMap<String, Any> = mutableMapOf(
             GradleVersion to target.gradle.gradleVersion,
             CreatedBy to "${System.getProperty("java.runtime.version")} (${System.getProperty("java.vendor")})",
             Permissions to "all-permissions",
@@ -186,21 +188,6 @@ open class ManifestPlugin : Plugin<Project> {
             PROP_BUILD_HOST to InetAddress.getLocalHost().hostName,
             PROP_BUILD_TIME to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME)
         )
-
-
-        /**
-         *  Working with the manifest this method is used to abstract the handling of simple entries
-         *
-         *  @param manifestKey how it is set in the META-INF/MANIFEST.MF file
-         *  @param manifestValue what the key is set to
-         *  @param manifest abstraction of the META-INF/MANIFEST.MF file
-         *  @param gradleProperties project properties
-         */
-        internal fun handleSimpleEntry(manifestKey: String, manifestValue: String, manifest: MutableMap<String, String>,
-                                       gradleProperties: MutableMap<*, *>) = with (manifestKey) {
-            manifest[this] = manifestValue
-            gradleProperties.remove(this)
-        }
 
 
         /**
@@ -234,27 +221,45 @@ open class ManifestPlugin : Plugin<Project> {
          *  @param manifest abstraction of the META-INF/MANIFEST.MF file
          *  @param extensionKey how it is set in the project extension
          *  @param extension abstraction of the project extension
+         *  @param mapping the mapping of manifest attribute key-value to be filled
          *  @param gradleProperties project properties
          *
          *  INFO: manifestKey / extensionKey is not the same yet!
          */
-        internal fun handleDefaultEntry(manifestKey: String, manifest: MutableMap<String, String>, extensionKey: String,
-                                        extension: Map<*, *>?, gradleProperties: MutableMap<*, *>) = with(manifestKey) {
+        internal fun handleDefaultEntry(manifestKey: String, manifest: MutableMap<String, String>,
+                                         extensionKey: String, extension: Map<*, *>?, mapping: MutableMap<String, Any>,
+                                         gradleProperties: MutableMap<*, *>) = with(manifestKey) {
+            // check if manifest key is populated in extension
             val propertyAvailable = extension.checkValuePossiblyExists(extensionKey)
 
             when {
-                // not in gradle.properties / propertyAvailable = true: use extension[${propertyKeyExtension}]
-                !gradleProperties.containsKey(this) && propertyAvailable
-                    -> manifest[this] = extension!![extensionKey].toString()
+                // propertyAvailable = true / not in gradle.properties
+                // -> manifest: use extension[${propertyKeyExtension}]
+                // -> mapping:  use extension[${propertyKeyExtension}]
+                propertyAvailable && !gradleProperties.containsKey(this) -> run {
+                    manifest[this] = extension!![extensionKey].toString()
+                    mapping[this] = extension[extensionKey].toString()
+                }
 
-                // in gradle.properties and not empty (propertyAvailable does not matter): use this one
-                gradleProperties.checkValueTrulyExists(this)
-                    -> manifest[this] = gradleProperties[this].toString()
+                // propertyAvailable = true / in gradle.properties but blank
+                // -> manifest: don't set entry
+                // -> mapping:  use extension[${propertyKeyExtension}]
+                propertyAvailable && gradleProperties.checkValueIsBlank(this) -> run {
+                    mapping[this] = extension!![extensionKey].toString()
+                }
 
-                // not in gradle.properties / propertyAvailable = false: cannot set the property
-                // in gradle.properties but empty: do not set the property
+                // in gradle.properties and not blank (propertyAvailable does not matter)
+                // -> manifest: use gradleProperties[${manifestKey}]
+                // -> mapping:  use gradleProperties[${manifestKey}]
+                gradleProperties.checkValueTrulyExists(this) -> run {
+                    manifest[this] = gradleProperties[this].toString()
+                    mapping[this] = gradleProperties[this].toString()
+                }
+
+                // propertyAvailable = false / not in gradle.properties: cannot set property
             }
 
+            // remove manifest key from gradle.properties
             gradleProperties.remove(this)
         }
 
@@ -266,29 +271,50 @@ open class ManifestPlugin : Plugin<Project> {
          *  @param version value from project.version
          *  @param manifest abstraction of the META-INF/MANIFEST.MF file
          *  @param extension abstraction of the project extension
+         *  @param mapping the mapping of manifest attribute key-value to be filled
          *  @param gradleProperties project properties
          */
         internal fun handleVersionEntry(manifestKey: String, version: Any, manifest: MutableMap<String, String>,
-                                        extension: Map<*, *>?, gradleProperties: MutableMap<*, *>) = with(manifestKey) {
+                                        extension: Map<*, *>?, mapping: MutableMap<String, Any>,
+                                        gradleProperties: MutableMap<*, *>) = with(manifestKey) {
+            // check if version is populated in extension
             val versionAvailable = extension.checkValuePossiblyExists(VERSION)
 
             when {
-                // not in gradle.properties / versionAvailable = true: use extension[${VERSION}]
-                !gradleProperties.containsKey(this) && versionAvailable
-                    -> manifest[this] = extension!![VERSION].toString()
+                // versionAvailable = true / not in gradle.properties
+                // -> manifest: use extension[${VERSION}]
+                // -> mapping:  use extension[${VERSION}]
+                versionAvailable && !gradleProperties.containsKey(this) -> run {
+                    manifest[this] = extension!![VERSION].toString()
+                    mapping[this] = extension[VERSION].toString()
+                }
 
-                // not in gradle.properties / versionAvailable = false: use project.version (only when correct)
+                // versionAvailable = true / in gradle.properties but blank
+                // -> manifest: don't set entry
+                // -> mapping:  use extension[${VERSION}]
+                versionAvailable && gradleProperties.checkValueIsBlank(this) -> run {
+                    mapping[this] = extension!![VERSION].toString()
+                }
+
+                // in gradle.properties and not blank (versionAvailable does not matter)
+                // -> manifest: use gradleProperties[${manifestKey}]
+                // -> mapping:  use gradleProperties[${manifestKey}]
+                gradleProperties.checkValueTrulyExists(this) -> run {
+                    manifest[this] = gradleProperties[this].toString()
+                    mapping[this] = gradleProperties[this].toString()
+                }
+
+                // versionAvailable = false / not in gradle.properties: use project.version (only when correct)
                 !gradleProperties.containsKey(this) && version.toString().isNotBlank()
-                                                    && !version.toString().contains("unspecified")
-                    -> manifest[this] = version as String
+                        && !version.toString().contains("unspecified") -> run {
+                    manifest[this] = version as String
+                    mapping[this] = version
+                }
 
-                // in gradle.properties and not empty (versionAvailable does not matter): use this one
-                gradleProperties.checkValueTrulyExists(this)
-                    -> manifest[this] = gradleProperties[this].toString()
-
-                // in gradle.properties but empty: do not set the property
+                // versionAvailable = false / not in gradle.properties / cannot use project.version: cannot set property
             }
 
+            // remove version from gradle.properties
             gradleProperties.remove(this)
         }
     }
@@ -308,7 +334,7 @@ open class ManifestPlugin : Plugin<Project> {
         // 2) Get (root) project extension if available & mapping
         //    INFO: Should be moved to "afterEvaluate" block, maybe tests must be fixed!
         val extension = getExtension(target)
-        var mappings = getMapping(target)
+        val mappings = getMapping(target)
 
         target.afterEvaluate {
             // all properties starting with "manifest."
@@ -328,17 +354,18 @@ open class ManifestPlugin : Plugin<Project> {
                 handleEasyEntry(it, mappings[it]!! as String, manifest, manifestGradleProperties)
             }
             handleVersionEntry(
-                PROP_PRODUCT_VERSION, mappings[PROP_PRODUCT_VERSION]!!, manifest, extension, manifestGradleProperties
+                PROP_PRODUCT_VERSION, mappings[PROP_PRODUCT_VERSION]!!, manifest, extension, mappings,
+                manifestGradleProperties
             )
-            handleDefaultEntry(PROP_PRODUCT_RC, manifest, RC, extension, manifestGradleProperties)
-            handleDefaultEntry(PROP_PRODUCT_RELEASED, manifest, RELEASED, extension, manifestGradleProperties)
+            handleDefaultEntry(PROP_PRODUCT_RC, manifest, RC, extension, mappings, manifestGradleProperties)
+            handleDefaultEntry(PROP_PRODUCT_RELEASED, manifest, RELEASED, extension, mappings, manifestGradleProperties)
             handleDefaultEntry(
-                PROP_UNIQUE_DEVICE_IDENTIFICATION_EU, manifest, UDI_EU, extension, manifestGradleProperties
+                PROP_UNIQUE_DEVICE_IDENTIFICATION_EU, manifest, UDI_EU, extension, mappings, manifestGradleProperties
             )
             handleDefaultEntry(
-                PROP_UNIQUE_DEVICE_IDENTIFICATION_USA, manifest, UDI_USA, extension, manifestGradleProperties
+                PROP_UNIQUE_DEVICE_IDENTIFICATION_USA, manifest, UDI_USA, extension, mappings, manifestGradleProperties
             )
-            handleDefaultEntry(PROP_VENDOR_NAME, manifest, VENDOR, extension, manifestGradleProperties)
+            handleDefaultEntry(PROP_VENDOR_NAME, manifest, VENDOR, extension, mappings, manifestGradleProperties)
 
             // 5) Properties based on "PROP_PRODUCT_RELEASED"
             if (manifest.containsKey(PROP_PRODUCT_RELEASED)
@@ -346,7 +373,7 @@ open class ManifestPlugin : Plugin<Project> {
                 listOf(
                     PROP_RELEASE_DATE, PROP_RELEASE_DATE_yyMMdd, PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME
                 ).forEach {
-                    handleSimpleEntry(it, mappings[it]!! as String, manifest, manifestGradleProperties)
+                    handleEasyEntry(it, mappings[it]!! as String, manifest, manifestGradleProperties)
                 }
             }
 
@@ -378,14 +405,12 @@ open class ManifestPlugin : Plugin<Project> {
 
                 // INFO: Patching "PROP_PRODUCT_VERSION" using Jira ticket id if found
                 if (target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().isPresent) {
-                    val mappingsEditable = mappings.toMutableMap()
-                    mappingsEditable[PROP_PRODUCT_VERSION] = "${mappingsEditable[PROP_PRODUCT_VERSION]}." +
+                    mappings[PROP_PRODUCT_VERSION] = "${mappings[PROP_PRODUCT_VERSION]}." +
                             target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().get()
-                    mappings = mappingsEditable
                 }
 
                 listOf(PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME).forEach {
-                    handleSimpleEntry(it, mappings[it]!! as String, patchedManifest, patchedManifestGradleProperties)
+                    handleEasyEntry(it, mappings[it]!! as String, patchedManifest, patchedManifestGradleProperties)
                 }
                 patchedManifestGradleProperties.forEach { when {
                     it.value.toString().isNotBlank() -> patchedManifest[it.key] = it.value.toString()

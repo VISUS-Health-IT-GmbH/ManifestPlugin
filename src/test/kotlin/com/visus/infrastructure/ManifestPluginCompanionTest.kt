@@ -49,14 +49,22 @@ open class ManifestPluginCompanionTest {
 
     /** 0) Create temporary directory for tests */
     @Before fun configureDirectories() {
-        if (rootProjectTestDir.exists() && rootProjectTestDir.isDirectory) {
-            Files.walk(rootProjectTestDir.toPath())
-                .sorted(Comparator.reverseOrder())
-                .map { it.toFile() }
-                .forEach { it.delete() }
+        // i) remove directories if exists
+        listOf(
+            rootProjectTestDir
+        ).forEach { dir ->
+            if (dir.exists() && dir.isDirectory) {
+                Files.walk(dir.toPath())
+                    .sorted(Comparator.reverseOrder())
+                    .map { it.toFile() }
+                    .forEach { it.delete() }
+            }
         }
 
-        rootProjectTestDir.mkdirs()
+        // ii) create directories
+        listOf(
+            rootProjectTestDir
+        ).forEach { it.mkdirs() }
     }
 
 
@@ -196,19 +204,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 14) Check the "ManifestPlugin.handleSimpleEntry" method */
-    @Test fun test_handleSimpleEntry() {
-        val manifest = mutableMapOf<String, String>()
-        val gradleProperties = mutableMapOf(KEY_NAME to KEY_VALUE) as MutableMap<*, *>
-
-        ManifestPlugin.handleSimpleEntry(KEY_NAME, KEY_VALUE, manifest, gradleProperties)
-        Assert.assertTrue(manifest.containsKey(KEY_NAME))
-        Assert.assertEquals(KEY_VALUE, manifest[KEY_NAME])
-        Assert.assertFalse(gradleProperties.containsKey(KEY_NAME))
-    }
-
-
-    /** 15) Check the "ManifestPlugin.handleEasyEntry" method: In gradle.properties but not valid */
+    /** 14) Check the "ManifestPlugin.handleEasyEntry" method: In gradle.properties but not valid */
     @Test fun test_handleEasyEntry_inPropertiesButEmpty() {
         val manifest = mutableMapOf<String, String>()
         val gradleProperties = mutableMapOf(KEY_NAME to null) as MutableMap<*, *>
@@ -219,7 +215,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 16) Check the "ManifestPlugin.handleEasyEntry" method: In gradle.properties */
+    /** 15) Check the "ManifestPlugin.handleEasyEntry" method: In gradle.properties */
     @Test fun test_handleEasyEntry_inProperties() {
         val manifest = mutableMapOf<String, String>()
         val gradleProperties = mutableMapOf(KEY_NAME to KEY_VALUE) as MutableMap<*, *>
@@ -231,7 +227,7 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 17) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties */
+    /** 16) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties */
     @Test fun test_handleEasyEntry_notInProperties() {
         val manifest = mutableMapOf<String, String>()
         val gradleProperties = mutableMapOf<String, String>() as MutableMap<*, *>
@@ -243,50 +239,75 @@ open class ManifestPluginCompanionTest {
     }
 
 
-    /** 18) Check the "ManifestPlugin.handleDefaultEntry" method: Not in gradle.properties but project extension */
+    /** 17) Check the "ManifestPlugin.handleDefaultEntry" method: Not in gradle.properties but project extension */
     @Test fun test_handleDefaultEntry_notInPropertiesButExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf(KEY_NAME to KEY_VALUE)
         val gradleProperties = mutableMapOf<String, String>() as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleDefaultEntry(KEY_NAME, manifest, KEY_NAME, extension, gradleProperties)
+        ManifestPlugin.handleDefaultEntry(KEY_NAME, manifest, KEY_NAME, extension, mapping, gradleProperties)
         Assert.assertTrue(manifest.containsKey(KEY_NAME))
         Assert.assertEquals(KEY_VALUE, manifest[KEY_NAME])
+        Assert.assertTrue(mapping.containsKey(KEY_NAME))
+        Assert.assertEquals(KEY_VALUE, mapping[KEY_NAME])
     }
 
 
-    /** 19) Check the "ManifestPlugin.handleDefaultEntry" method: Not in gradle.properties and not project extension */
+    /** 18) Check the "ManifestPlugin.handleDefaultEntry" method: Not in gradle.properties and not project extension */
     @Test fun test_handleDefaultEntry_notInPropertiesNotExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
         val gradleProperties = mutableMapOf<String, String>() as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleDefaultEntry(KEY_NAME, manifest, KEY_NAME, extension, gradleProperties)
+        ManifestPlugin.handleDefaultEntry(KEY_NAME, manifest, KEY_NAME, extension, mapping, gradleProperties)
         Assert.assertFalse(manifest.containsKey(KEY_NAME))
+        Assert.assertFalse(mapping.containsKey(KEY_NAME))
     }
 
 
-    /** 20) Check the "ManifestPlugin.handleDefaultEntry" method: In gradle.properties but project extension */
+    /** 19) Check the "ManifestPlugin.handleDefaultEntry" method: In gradle.properties but project extension */
     @Test fun test_handleDefaultEntry_inPropertiesButExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf(KEY_NAME to KEY_VALUE)
         val gradleProperties = mutableMapOf(KEY_NAME to KEY_VALUE) as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleDefaultEntry(KEY_NAME, manifest, KEY_NAME, extension, gradleProperties)
+        ManifestPlugin.handleDefaultEntry(KEY_NAME, manifest, KEY_NAME, extension, mapping, gradleProperties)
         Assert.assertTrue(manifest.containsKey(KEY_NAME))
         Assert.assertEquals(KEY_VALUE, manifest[KEY_NAME])
+        Assert.assertTrue(mapping.containsKey(KEY_NAME))
+        Assert.assertEquals(KEY_VALUE, mapping[KEY_NAME])
     }
 
 
-    /** 21) Check the "ManifestPlugin.handleDefaultEntry" method: In gradle.properties and not project extension */
+    /** 20) Check the "ManifestPlugin.handleDefaultEntry" method: In gradle.properties and not project extension */
     @Test fun test_handleDefaultEntry_inPropertiesNotExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
         val gradleProperties = mutableMapOf(KEY_NAME to KEY_VALUE) as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleDefaultEntry(KEY_NAME, manifest, KEY_NAME, extension, gradleProperties)
+        ManifestPlugin.handleDefaultEntry(KEY_NAME, manifest, KEY_NAME, extension, mapping, gradleProperties)
         Assert.assertTrue(manifest.containsKey(KEY_NAME))
         Assert.assertEquals(KEY_VALUE, manifest[KEY_NAME])
+        Assert.assertTrue(mapping.containsKey(KEY_NAME))
+        Assert.assertEquals(KEY_VALUE, mapping[KEY_NAME])
+    }
+
+
+    /** 21) Check the "ManifestPlugin.handleDefaultEntry" method: In gradle.properties blank but in project extension */
+    @Test fun test_handleDefaultEntry_inPropertiesBlankButExtension() {
+        val manifest = mutableMapOf<String, String>()
+        val extension = mapOf(KEY_NAME to KEY_VALUE)
+        val gradleProperties = mutableMapOf(KEY_NAME to "") as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
+
+        ManifestPlugin.handleDefaultEntry(KEY_NAME, manifest, KEY_NAME, extension, mapping, gradleProperties)
+        Assert.assertFalse(manifest.containsKey(KEY_NAME))
+        Assert.assertTrue(mapping.containsKey(KEY_NAME))
+        Assert.assertEquals(KEY_VALUE, mapping[KEY_NAME])
     }
 
 
@@ -294,12 +315,14 @@ open class ManifestPluginCompanionTest {
     @Test fun test_handleVersionEntry_inPropertiesButEmpty() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
-        val gradleProperties = mutableMapOf(ManifestPlugin.VERSION to "") as MutableMap<*, *>
+        val gradleProperties = mutableMapOf(ManifestPlugin.PROP_PRODUCT_VERSION to "") as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleVersionEntry(ManifestPlugin.VERSION, GradleVersion.current().version, manifest, extension,
-                                          gradleProperties)
-        Assert.assertFalse(manifest.containsKey(ManifestPlugin.VERSION))
-        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.VERSION))
+        ManifestPlugin.handleVersionEntry(ManifestPlugin.PROP_PRODUCT_VERSION, GradleVersion.current().version,
+                                          manifest, extension, mapping, gradleProperties)
+        Assert.assertFalse(manifest.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertFalse(mapping.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
     }
 
 
@@ -307,66 +330,112 @@ open class ManifestPluginCompanionTest {
     @Test fun test_handleVersionEntry_inProperties() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
-        val gradleProperties = mutableMapOf(ManifestPlugin.VERSION to "1.2.3.4") as MutableMap<*, *>
+        val gradleProperties = mutableMapOf(ManifestPlugin.PROP_PRODUCT_VERSION to "1.2.3.4") as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleVersionEntry(ManifestPlugin.VERSION, GradleVersion.current().version, manifest, extension,
-                                          gradleProperties)
-        Assert.assertTrue(manifest.containsKey(ManifestPlugin.VERSION))
-        Assert.assertEquals("1.2.3.4", manifest[ManifestPlugin.VERSION])
-        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.VERSION))
+        ManifestPlugin.handleVersionEntry(ManifestPlugin.PROP_PRODUCT_VERSION, GradleVersion.current().version,
+                                          manifest, extension, mapping, gradleProperties)
+        Assert.assertTrue(manifest.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals("1.2.3.4", manifest[ManifestPlugin.PROP_PRODUCT_VERSION])
+        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertTrue(mapping.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals("1.2.3.4", mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
     }
 
 
-    /** 24) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties / extension -> unspecified */
-    @Test fun test_handleEasyEntry_notInPropertiesNotInExtensionAndUnspecified() {
+    /** 24) Check the "ManifestPlugin.handleVersionEntry" method: Not in gradle.properties / extension -> unspecified */
+    @Test fun test_handleVersionEntry_notInPropertiesNotInExtensionAndUnspecified() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
         val gradleProperties = mutableMapOf<String, String>() as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleVersionEntry(ManifestPlugin.VERSION, "unspecified", manifest, extension,
-                                          gradleProperties)
-        Assert.assertFalse(manifest.containsKey(ManifestPlugin.VERSION))
-        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.VERSION))
+        ManifestPlugin.handleVersionEntry(ManifestPlugin.PROP_PRODUCT_VERSION, "unspecified", manifest, extension,
+                                          mapping, gradleProperties)
+        Assert.assertFalse(manifest.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertFalse(mapping.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
     }
 
 
-    /** 25) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties / extension -> blank */
-    @Test fun test_handleEasyEntry_notInPropertiesNotInExtensionAndBlank() {
+    /** 25) Check the "ManifestPlugin.handleVersionEntry" method: Not in gradle.properties / extension -> blank */
+    @Test fun test_handleVersionEntry_notInPropertiesNotInExtensionAndBlank() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
         val gradleProperties = mutableMapOf<String, String>() as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleVersionEntry(ManifestPlugin.VERSION, "", manifest, extension,
+        ManifestPlugin.handleVersionEntry(ManifestPlugin.PROP_PRODUCT_VERSION, "", manifest, extension, mapping,
                                           gradleProperties)
-        Assert.assertFalse(manifest.containsKey(ManifestPlugin.VERSION))
-        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.VERSION))
+        Assert.assertFalse(manifest.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertFalse(mapping.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
     }
 
 
-    /** 26) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties / extension -> correct */
-    @Test fun test_handleEasyEntry_notInPropertiesNotInExtensionAndCorrect() {
+    /** 26) Check the "ManifestPlugin.handleVersionEntry" method: Not in gradle.properties / extension -> correct */
+    @Test fun test_handleVersionEntry_notInPropertiesNotInExtensionAndCorrect() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf<String, String>()
         val gradleProperties = mutableMapOf<String, String>() as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleVersionEntry(ManifestPlugin.VERSION, GradleVersion.current().version, manifest, extension,
-                                          gradleProperties)
-        Assert.assertTrue(manifest.containsKey(ManifestPlugin.VERSION))
-        Assert.assertEquals(GradleVersion.current().version, manifest[ManifestPlugin.VERSION])
-        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.VERSION))
+        ManifestPlugin.handleVersionEntry(ManifestPlugin.PROP_PRODUCT_VERSION, GradleVersion.current().version,
+                                          manifest, extension, mapping, gradleProperties)
+        Assert.assertTrue(manifest.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals(GradleVersion.current().version, manifest[ManifestPlugin.PROP_PRODUCT_VERSION])
+        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertTrue(mapping.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals(GradleVersion.current().version, mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
     }
 
 
-    /** 27) Check the "ManifestPlugin.handleEasyEntry" method: Not in gradle.properties but in extension */
-    @Test fun test_handleEasyEntry_notInPropertiesInExtension() {
+    /** 27) Check the "ManifestPlugin.handleVersionEntry" method: Not in gradle.properties but in extension */
+    @Test fun test_handleVersionEntry_notInPropertiesInExtension() {
         val manifest = mutableMapOf<String, String>()
         val extension = mapOf(ManifestPlugin.VERSION to "1.2.3.4")
         val gradleProperties = mutableMapOf<String, String>() as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
 
-        ManifestPlugin.handleVersionEntry(ManifestPlugin.VERSION, GradleVersion.current().version, manifest, extension,
-            gradleProperties)
-        Assert.assertTrue(manifest.containsKey(ManifestPlugin.VERSION))
-        Assert.assertEquals("1.2.3.4", manifest[ManifestPlugin.VERSION])
-        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.VERSION))
+        ManifestPlugin.handleVersionEntry(ManifestPlugin.PROP_PRODUCT_VERSION, GradleVersion.current().version,
+                                          manifest, extension, mapping, gradleProperties)
+        Assert.assertTrue(manifest.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals("1.2.3.4", manifest[ManifestPlugin.PROP_PRODUCT_VERSION])
+        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertTrue(mapping.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals("1.2.3.4", mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 28) Check the "ManifestPlugin.handleVersionEntry" method: In gradle.properties (blank) and in extension */
+    @Test fun test_handleVersionEntry_inPropertiesBlankInExtension() {
+        val manifest = mutableMapOf<String, String>()
+        val extension = mapOf(ManifestPlugin.VERSION to "1.2.3.4")
+        val gradleProperties = mutableMapOf(ManifestPlugin.PROP_PRODUCT_VERSION to "") as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
+
+        ManifestPlugin.handleVersionEntry(ManifestPlugin.PROP_PRODUCT_VERSION, GradleVersion.current().version,
+                                          manifest, extension, mapping, gradleProperties)
+        Assert.assertFalse(manifest.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertTrue(mapping.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals("1.2.3.4", mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 29) Check the "ManifestPlugin.handleVersionEntry" method: In gradle.properties and in extension */
+    @Test fun test_handleVersionEntry_inPropertiesInExtension() {
+        val manifest = mutableMapOf<String, String>()
+        val extension = mapOf(ManifestPlugin.VERSION to "1.2.3.4")
+        val gradleProperties = mutableMapOf(ManifestPlugin.PROP_PRODUCT_VERSION to "a.b.c") as MutableMap<*, *>
+        val mapping = mutableMapOf<String, Any>()
+
+        ManifestPlugin.handleVersionEntry(ManifestPlugin.PROP_PRODUCT_VERSION, GradleVersion.current().version,
+            manifest, extension, mapping, gradleProperties)
+        Assert.assertTrue(manifest.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals("a.b.c", manifest[ManifestPlugin.PROP_PRODUCT_VERSION])
+        Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertTrue(mapping.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
+        Assert.assertEquals("a.b.c", mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
     }
 }

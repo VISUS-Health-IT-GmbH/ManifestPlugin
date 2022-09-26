@@ -14,6 +14,17 @@ package com.visus.infrastructure.extension
 
 
 /**
+ *  Extension to Map<*, *> to check if value accessed by key exists and is blank
+ *
+ *  @param key to access value
+ *  @return true if value is not null but blank, false otherwise
+ */
+internal fun Map<*, *>.checkValueIsBlank(key: String) : Boolean {
+    return this.containsKey(key) && this[key]?.toString()?.isBlank() ?: false
+}
+
+
+/**
  *  Extension to Map<*, *> to check if a value accessed by key exists and is filled with actual value
  *
  *  @param key to access value

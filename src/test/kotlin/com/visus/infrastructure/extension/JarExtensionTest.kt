@@ -54,28 +54,21 @@ open class JarExtensionTest {
         /** 0) Create temporary directories for tests */
         @BeforeClass @JvmStatic fun configureTestsuite() {
             // i) remove directories if exists
-            if (projectProjectDir1.exists() && projectProjectDir1.isDirectory) {
-                Files.walk(projectProjectDir1.toPath())
-                    .sorted(Comparator.reverseOrder())
-                    .map { it.toFile() }
-                    .forEach { it.delete() }
-            }
-
-            if (projectProjectDir2.exists() && projectProjectDir2.isDirectory) {
-                Files.walk(projectProjectDir2.toPath())
-                    .sorted(Comparator.reverseOrder())
-                    .map { it.toFile() }
-                    .forEach { it.delete() }
+            listOf(
+                projectProjectDir1, projectProjectDir2
+            ).forEach { dir ->
+                if (dir.exists() && dir.isDirectory) {
+                    Files.walk(dir.toPath())
+                        .sorted(Comparator.reverseOrder())
+                        .map { it.toFile() }
+                        .forEach { it.delete() }
+                }
             }
 
             // ii) create directories
-            projectProjectDir1.mkdirs()
-            projectBuildDir1.mkdirs()
-            projectLibsDir1.mkdirs()
-
-            projectProjectDir2.mkdirs()
-            projectBuildDir2.mkdirs()
-            projectLibsDir2.mkdirs()
+            listOf(
+                projectLibsDir1, projectLibsDir2
+            ).forEach { it.mkdirs() }
         }
     }
 

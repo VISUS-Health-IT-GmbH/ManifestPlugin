@@ -68,44 +68,34 @@ open class ManifestPluginTest {
         private val projectBuildDir3    = File(projectProjectDir3, "build")
         private val projectLibsDir3     = File(projectBuildDir3, "libs")
 
+        private val projectProjectDir4  = File(buildDir, "${ManifestPluginTest::class.simpleName}_4")
+        private val projectBuildDir4    = File(projectProjectDir4, "build")
+        private val projectLibsDir4     = File(projectBuildDir4, "libs")
+
+        private val projectProjectDir5  = File(buildDir, "${ManifestPluginTest::class.simpleName}_5")
+        private val projectBuildDir5    = File(projectProjectDir5, "build")
+        private val projectLibsDir5     = File(projectBuildDir5, "libs")
+
 
         /** 0) Create temporary directories for tests */
         @BeforeClass
         @JvmStatic fun configureTestsuite() {
             // i) remove directories if exists
-            if (projectProjectDir1.exists() && projectProjectDir1.isDirectory) {
-                Files.walk(projectProjectDir1.toPath())
-                    .sorted(Comparator.reverseOrder())
-                    .map { it.toFile() }
-                    .forEach { it.delete() }
-            }
-
-            if (projectProjectDir2.exists() && projectProjectDir2.isDirectory) {
-                Files.walk(projectProjectDir2.toPath())
-                    .sorted(Comparator.reverseOrder())
-                    .map { it.toFile() }
-                    .forEach { it.delete() }
-            }
-
-            if (projectProjectDir3.exists() && projectProjectDir3.isDirectory) {
-                Files.walk(projectProjectDir3.toPath())
-                    .sorted(Comparator.reverseOrder())
-                    .map { it.toFile() }
-                    .forEach { it.delete() }
+            listOf(
+                projectProjectDir1, projectProjectDir2, projectProjectDir3, projectProjectDir4, projectProjectDir5
+            ).forEach { dir ->
+                if (dir.exists() && dir.isDirectory) {
+                    Files.walk(dir.toPath())
+                        .sorted(Comparator.reverseOrder())
+                        .map { it.toFile() }
+                        .forEach { it.delete() }
+                }
             }
 
             // ii) create directories
-            projectProjectDir1.mkdirs()
-            projectBuildDir1.mkdirs()
-            projectLibsDir1.mkdirs()
-
-            projectProjectDir2.mkdirs()
-            projectBuildDir2.mkdirs()
-            projectLibsDir2.mkdirs()
-
-            projectProjectDir3.mkdirs()
-            projectBuildDir3.mkdirs()
-            projectLibsDir3.mkdirs()
+            listOf(
+                projectLibsDir1, projectLibsDir2, projectLibsDir3, projectLibsDir4, projectLibsDir5
+            ).forEach { it.mkdirs() }
         }
     }
 
@@ -512,6 +502,108 @@ open class ManifestPluginTest {
             Assert.assertTrue(content.contains("Resources-Project-Version: NOVERSION"))
             Assert.assertTrue(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: VERSION123"))
         }
+    }
+
+
+    /**
+     *  15) VISUS-12: Test that ${PROP_PRODUCT_RC} will be replaced even though deactivated in manifest attributes
+     *                -> manifest.PROP_PRODUCT_RC=
+     *                -> manifest.TEST-ATTRIBUTE1=${PROP_PRODUCT_RC}
+     *                -> patched.manifest.TEST_ATTRIBUTE2=${PROP_PRODUCT_RC}
+     */
+    @Test fun test_VISUS12_BetterMapping1() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir4).build()
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(
+            project.name, mapOf(
+                "rc" to "RC01"
+            )
+        )
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.PROP_PRODUCT_RC}", "")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}TEST-ATTRIBUTE1", "\${PROP_PRODUCT_RC}")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_PATCHED}TEST-ATTRIBUTE2", "\${PROP_PRODUCT_RC}")
+
+        // apply JavaPlugin (required) / ManifestPlugin & evaluate
+        project.pluginManager.apply(JavaPlugin::class.java)
+        project.pluginManager.apply(ManifestPlugin::class.java)
+        project.evaluate()
+
+        // get main Jar task & emulate running task
+        val task = project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar
+        task.actions.forEach {
+            it.execute(task)
+        }
+
+        // check not yet patched WAR archive artefact manifest file
+        var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}")
+            .getManifestFileContent()
+        Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_RC}: "))
+        Assert.assertTrue(content.contains("TEST-ATTRIBUTE1: RC01"))
+
+        // get "patch.archives" task & emulate running task
+        val patchTask = project.tasks.findByName(ManifestPlugin.TASK_NAME) as Task
+        patchTask.actions.forEach {
+            it.execute(patchTask)
+        }
+
+        // check patched WAR archive artefact manifest file
+        content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+        Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_RC}: "))
+        Assert.assertTrue(content.contains("TEST-ATTRIBUTE2: RC01"))
+    }
+
+
+    /**
+     *  16) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will be replaced even though deactivated in manifest attributes
+     *                -> manifest.PROP_PRODUCT_VERSION=
+     *                -> manifest.TEST-ATTRIBUTE1=${PROP_PRODUCT_VERSION}
+     *                -> patched.manifest.TEST_ATTRIBUTE2=${PROP_PRODUCT_VERSION}
+     */
+    @Test fun test_VISUS12_BetterMapping2() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir5).build()
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(
+            project.name, mapOf(
+                "version" to "1.2.3.4"
+            )
+        )
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.PROP_PRODUCT_VERSION}", "")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}TEST-ATTRIBUTE1", "\${PROP_PRODUCT_VERSION}")
+        propertiesExtension.set("${ManifestPlugin.PREFIX_PATCHED}TEST-ATTRIBUTE2", "\${PROP_PRODUCT_VERSION}")
+
+        // apply JavaPlugin (required) / ManifestPlugin & evaluate
+        project.pluginManager.apply(JavaPlugin::class.java)
+        project.pluginManager.apply(ManifestPlugin::class.java)
+        project.evaluate()
+
+        // get main Jar task & emulate running task
+        val task = project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar
+        task.actions.forEach {
+            it.execute(task)
+        }
+
+        // check not yet patched WAR archive artefact manifest file
+        var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}")
+            .getManifestFileContent()
+        Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: "))
+        Assert.assertTrue(content.contains("TEST-ATTRIBUTE1: 1.2.3.4"))
+
+        // get "patch.archives" task & emulate running task
+        val patchTask = project.tasks.findByName(ManifestPlugin.TASK_NAME) as Task
+        patchTask.actions.forEach {
+            it.execute(patchTask)
+        }
+
+        // check patched WAR archive artefact manifest file
+        content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+        Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: "))
+        Assert.assertTrue(content.contains("TEST-ATTRIBUTE2: 1.2.3.4"))
     }
 }
 
