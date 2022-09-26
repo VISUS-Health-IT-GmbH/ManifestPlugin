@@ -53,6 +53,7 @@ open class ManifestPlugin : Plugin<Project> {
         internal const val KEY_PATCH                                = "plugins.manifest.properties.patchArchives"
 
         // system property used for patching PROP_PRODUCT_VERSION (currently Jira tickets only)
+        // TODO: Rename to "TICKET_ID" and add "BUILD_ID" for Jenkins build id!
         internal const val SYS_TICKET                               = "JIRA_TICKET"
 
         // task name for patching archive artifacts
