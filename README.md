@@ -116,6 +116,18 @@ change the default manifest attributes or the patched ones!
 for patching the archives manifest files uses the standard *jar* command of the specific JDK which only allows to append
 manifest attributes but not to overwrite existing ones!
 
+This is an issue when you want to patch the "PROP_PRODUCT_VERSION" manifest attribute: The manifest attribute should be
+disabled for the default manifest attributes (non-patched) and enabled using a specific property for it only being
+available in the patched manifest attributes:
+
+```properties
+# Disable PROP_PRODUCT_VERSION in default archive manifest
+manifest.PROP_PRODUCT_VERSION=
+
+# Special edge case only for PROP_PRODUCT_VERSION -> this enables the patched version in the manifest attributes
+plugins.manifest.properties.patchVersion=Boolean
+```
+
 ## What's up with the plugin id?
 
 Q: Why is the plugin id *com.visus.infrastructure.vmanifest*? \

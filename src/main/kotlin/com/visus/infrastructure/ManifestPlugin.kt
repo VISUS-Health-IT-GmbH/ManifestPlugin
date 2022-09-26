@@ -44,13 +44,13 @@ import com.visus.infrastructure.extension.substituteProperties
  *  Plugin to create specific manifest attributes. Allows use to add / overwrite custom attributes.
  *
  *  TODO: Add property to disable warnings. Also in JarExtension!
- *  TODO: Add property to explicitly set PROP_PRODUCT_VERSION in patched archive artifact even if deactivated for normal artifact!
  */
 open class ManifestPlugin : Plugin<Project> {
     companion object {
         // identifiers of the properties needed by this plugin
         internal const val KEY_EXTENSION                            = "plugins.manifest.properties.differentExtension"
         internal const val KEY_PATCH                                = "plugins.manifest.properties.patchArchives"
+        internal const val KEY_VERSION                              = "plugins.manifest.properties.patchVersion"
 
         // system property used for patching PROP_PRODUCT_VERSION (currently Jira tickets only)
         // TODO: Rename to "TICKET_ID" and add "BUILD_ID" for Jenkins build id!
@@ -408,6 +408,10 @@ open class ManifestPlugin : Plugin<Project> {
                 if (target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().isPresent) {
                     mappings[PROP_PRODUCT_VERSION] = "${mappings[PROP_PRODUCT_VERSION]}." +
                             target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().get()
+                }
+                // TODO: Handle "unspecified" (Project.DEFAULT_VERSION)!
+                if (target.properties.containsKey(KEY_VERSION) && target.properties[KEY_VERSION]!!.isTrue()) {
+                    patchedManifest[PROP_PRODUCT_VERSION] = mappings[PROP_PRODUCT_VERSION] as String
                 }
 
                 listOf(PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME).forEach {
