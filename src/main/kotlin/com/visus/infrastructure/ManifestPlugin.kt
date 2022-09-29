@@ -52,9 +52,10 @@ open class ManifestPlugin : Plugin<Project> {
         internal const val KEY_PATCH                                = "plugins.manifest.properties.patchArchives"
         internal const val KEY_VERSION                              = "plugins.manifest.properties.patchVersion"
 
-        // system property used for patching PROP_PRODUCT_VERSION (currently Jira tickets only)
-        // TODO: Rename to "TICKET_ID" and add "BUILD_ID" for Jenkins build id!
+        // system property used for patching PROP_PRODUCT_VERSION (currently Jira tickets only + build id)
+        // TODO: Rename to "TICKET_ID"!
         internal const val SYS_TICKET                               = "JIRA_TICKET"
+        internal const val SYS_BUILD                                = "BUILD_ID"
 
         // task name for patching archive artifacts
         internal const val TASK_NAME                                = "patch.archives"
@@ -409,6 +410,12 @@ open class ManifestPlugin : Plugin<Project> {
                     mappings[PROP_PRODUCT_VERSION] = "${mappings[PROP_PRODUCT_VERSION]}." +
                             target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().get()
                 }
+                // INFO: Patching "PROP_PRODUCT_VERSION" using build id if found
+                if (target.providers.systemProperty(SYS_BUILD).forUseAtConfigurationTime().isPresent) {
+                    mappings[PROP_PRODUCT_VERSION] = "${mappings[PROP_PRODUCT_VERSION]}." +
+                            target.providers.systemProperty(SYS_BUILD).forUseAtConfigurationTime().get()
+                }
+
                 // TODO: Handle "unspecified" (Project.DEFAULT_VERSION)!
                 if (target.properties.containsKey(KEY_VERSION) && target.properties[KEY_VERSION]!!.isTrue()) {
                     patchedManifest[PROP_PRODUCT_VERSION] = mappings[PROP_PRODUCT_VERSION] as String

@@ -92,14 +92,34 @@ open class ManifestPluginTest {
         private val projectBuildDir9    = File(projectProjectDir9, "build")
         private val projectLibsDir9     = File(projectBuildDir9, "libs")
 
+        private val projectProjectDir10  = File(buildDir, "${ManifestPluginTest::class.simpleName}_10")
+        private val projectBuildDir10    = File(projectProjectDir10, "build")
+        private val projectLibsDir10     = File(projectBuildDir10, "libs")
+
+        private val projectProjectDir11  = File(buildDir, "${ManifestPluginTest::class.simpleName}_11")
+        private val projectBuildDir11    = File(projectProjectDir11, "build")
+        private val projectLibsDir11     = File(projectBuildDir11, "libs")
+
+        private val projectProjectDir12  = File(buildDir, "${ManifestPluginTest::class.simpleName}_12")
+        private val projectBuildDir12    = File(projectProjectDir12, "build")
+        private val projectLibsDir12     = File(projectBuildDir12, "libs")
+
+        private val projectProjectDir13  = File(buildDir, "${ManifestPluginTest::class.simpleName}_13")
+        private val projectBuildDir13    = File(projectProjectDir13, "build")
+        private val projectLibsDir13     = File(projectBuildDir13, "libs")
+
+        private val projectProjectDir14  = File(buildDir, "${ManifestPluginTest::class.simpleName}_14")
+        private val projectBuildDir14    = File(projectProjectDir14, "build")
+        private val projectLibsDir14     = File(projectBuildDir14, "libs")
+
 
         /** 0) Create temporary directories for tests */
-        @BeforeClass
-        @JvmStatic fun configureTestsuite() {
+        @BeforeClass @JvmStatic fun configureTestsuite() {
             // i) remove directories if exists
             listOf(
                 projectProjectDir1, projectProjectDir2, projectProjectDir3, projectProjectDir4, projectProjectDir5,
-                projectProjectDir6, projectProjectDir7, projectProjectDir8, projectProjectDir9
+                projectProjectDir6, projectProjectDir7, projectProjectDir8, projectProjectDir9, projectProjectDir10,
+                projectProjectDir11, projectProjectDir12, projectProjectDir13, projectProjectDir14
             ).forEach { dir ->
                 if (dir.exists() && dir.isDirectory) {
                     Files.walk(dir.toPath())
@@ -112,7 +132,8 @@ open class ManifestPluginTest {
             // ii) create directories
             listOf(
                 projectLibsDir1, projectLibsDir2, projectLibsDir3, projectLibsDir4, projectLibsDir5, projectLibsDir6,
-                projectLibsDir7, projectLibsDir8, projectLibsDir9
+                projectLibsDir7, projectLibsDir8, projectLibsDir9, projectLibsDir10, projectLibsDir11, projectLibsDir12,
+                projectLibsDir13, projectLibsDir14
             ).forEach { it.mkdirs() }
         }
     }
@@ -677,7 +698,7 @@ open class ManifestPluginTest {
 
 
     /**
-     *  17) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will be in patched manifest attributes with ticket id even
+     *  18) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will be in patched manifest attributes with ticket id even
      *      though it was not disabled in normal manifest attributes and strictly enabled by custom property
      *      -> version available, manually set
      */
@@ -726,7 +747,7 @@ open class ManifestPluginTest {
     }
 
 
-    /** 18) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will not be patched if property strictly disabled */
+    /** 19) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will not be patched if property strictly disabled */
     @Test fun test_VISUS12_VersionShouldNotBePatched() {
         val project = ProjectBuilder.builder().withProjectDir(projectProjectDir8).build().also {
             it.version = GradleVersion.current().version
@@ -769,9 +790,200 @@ open class ManifestPluginTest {
     }
 
 
-    /** 19) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will not be patched as no version available */
+    /** 20) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will not be patched as no version available */
     /*@Test fun test_VISUS12_VersionNotAvailable() {
-        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir9).build()
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir10).build()
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+
+        restoreSystemProperties {
+            System.setProperty(ManifestPlugin.SYS_TICKET, "VISUS-1234")
+
+            // apply JavaPlugin (required) / ManifestPlugin & evaluate
+            project.pluginManager.apply(JavaPlugin::class.java)
+            project.pluginManager.apply(ManifestPlugin::class.java)
+            project.evaluate()
+
+            // get main Jar task & emulate running task
+            val task = project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar
+            task.actions.forEach {
+                it.execute(task)
+            }
+
+            // check not yet patched JAR archive artefact manifest file
+            var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}"))
+
+            // get "patch.archives" task & emulate running task
+            val patchTask = project.tasks.findByName(ManifestPlugin.TASK_NAME) as Task
+            patchTask.actions.forEach {
+                it.execute(patchTask)
+            }
+
+            // check patched JAR archive artefact manifest file
+            content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}"))
+        }
+    }*/
+
+
+    /**
+     *  21) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will be in patched manifest attributes with build id even
+     *      though it is disabled in normal manifest attributes and strictly enabled by custom property
+     *      -> version available, manually set
+     */
+    @Test fun test_VISUS12_VersionCorrectlyPatchedBuildId() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir11).build().also {
+            it.version = GradleVersion.current().version
+        }
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.PROP_PRODUCT_VERSION}", "")
+
+        restoreSystemProperties {
+            System.setProperty(ManifestPlugin.SYS_TICKET, "VISUS-1234")
+            System.setProperty(ManifestPlugin.SYS_BUILD, "1337")
+
+            // apply JavaPlugin (required) / ManifestPlugin & evaluate
+            project.pluginManager.apply(JavaPlugin::class.java)
+            project.pluginManager.apply(ManifestPlugin::class.java)
+            project.evaluate()
+
+            // get main Jar task & emulate running task
+            val task = project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar
+            task.actions.forEach {
+                it.execute(task)
+            }
+
+            // check not yet patched JAR archive artefact manifest file
+            var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: "))
+
+            // get "patch.archives" task & emulate running task
+            val patchTask = project.tasks.findByName(ManifestPlugin.TASK_NAME) as Task
+            patchTask.actions.forEach {
+                it.execute(patchTask)
+            }
+
+            // check patched JAR archive artefact manifest file
+            content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertTrue(
+                content.contains(
+                    "${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}." +
+                    "${System.getProperty(ManifestPlugin.SYS_TICKET)}." +
+                    System.getProperty(ManifestPlugin.SYS_BUILD)
+                )
+            )
+        }
+    }
+
+
+    /**
+     *  22) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will be in patched manifest attributes with build id even
+     *      though it was not disabled in normal manifest attributes and strictly enabled by custom property
+     *      -> version available, manually set
+     */
+    @Test fun test_VISUS12_VersionWronglyPatchedBuildId() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir12).build().also {
+            it.version = GradleVersion.current().version
+        }
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+
+        restoreSystemProperties {
+            System.setProperty(ManifestPlugin.SYS_TICKET, "VISUS-1234")
+            System.setProperty(ManifestPlugin.SYS_BUILD, "1337")
+
+            // apply JavaPlugin (required) / ManifestPlugin & evaluate
+            project.pluginManager.apply(JavaPlugin::class.java)
+            project.pluginManager.apply(ManifestPlugin::class.java)
+            project.evaluate()
+
+            // get main Jar task & emulate running task
+            val task = project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar
+            task.actions.forEach {
+                it.execute(task)
+            }
+
+            // check not yet patched JAR archive artefact manifest file
+            var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertTrue(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}"))
+
+            // get "patch.archives" task & emulate running task
+            val patchTask = project.tasks.findByName(ManifestPlugin.TASK_NAME) as Task
+            patchTask.actions.forEach {
+                it.execute(patchTask)
+            }
+
+            // check patched JAR archive artefact manifest file
+            content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertTrue(
+                content.contains(
+                    "${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}." +
+                    "${System.getProperty(ManifestPlugin.SYS_TICKET)}." +
+                    System.getProperty(ManifestPlugin.SYS_BUILD)
+                )
+            )
+        }
+    }
+
+
+    /** 23) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will not be patched if property strictly disabled (build id) */
+    @Test fun test_VISUS12_VersionShouldNotBePatchedBuildId() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir13).build().also {
+            it.version = GradleVersion.current().version
+        }
+
+        // emulate gradle.properties (should patch and some specific properties only available in patched archive)
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, false)
+        propertiesExtension.set("${ManifestPlugin.PREFIX_DEFAULT}${ManifestPlugin.PROP_PRODUCT_VERSION}", "")
+
+        restoreSystemProperties {
+            System.setProperty(ManifestPlugin.SYS_TICKET, "VISUS-1234")
+            System.setProperty(ManifestPlugin.SYS_BUILD, "1337")
+
+            // apply JavaPlugin (required) / ManifestPlugin & evaluate
+            project.pluginManager.apply(JavaPlugin::class.java)
+            project.pluginManager.apply(ManifestPlugin::class.java)
+            project.evaluate()
+
+            // get main Jar task & emulate running task
+            val task = project.tasks.getByName(JavaPlugin.JAR_TASK_NAME) as Jar
+            task.actions.forEach {
+                it.execute(task)
+            }
+
+            // check not yet patched JAR archive artefact manifest file
+            var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}"))
+
+            // get "patch.archives" task & emulate running task
+            val patchTask = project.tasks.findByName(ManifestPlugin.TASK_NAME) as Task
+            patchTask.actions.forEach {
+                it.execute(patchTask)
+            }
+
+            // check patched JAR archive artefact manifest file
+            content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+            Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}"))
+        }
+    }
+
+
+    /** 24) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will not be patched as no version available (build id) */
+    /*@Test fun test_VISUS12_VersionNotAvailable() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir14).build()
 
         // emulate gradle.properties (should patch and some specific properties only available in patched archive)
         val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
