@@ -33,6 +33,7 @@ PROP_UNIQUE_DEVICE_IDENTIFICATION_USA: ${project.${project.name}.udi_usa} when f
 PROP_VENDOR_NAME: ${project.${project.name}.vendor} when found
 PROP_RELEASE_DATE: Date (only available when ${project.${project.name}.released} is true)
 PROP_RELEASE_DATE_yyMMdd: Date (only available when ${project.${project.name}.released} is true)
+PROP_BUILD_DATE: Date (only available when ${project.${project.name}.released} is true)
 PROP_BUILD_TIME: Time (only available when ${project.${project.name}.released} is true)
 PROP_BUILD_USER: User (only available when ${project.${project.name}.released} is true)
 PROP_BUILD_HOST: Host (only available when ${project.${project.name}.released} is true)
@@ -69,8 +70,10 @@ plugins.manifest.properties.patchArchives=Boolean
 ```
 
 This will add a new Gradle task *patch.archives* which will patch the JAR / WAR archive manifest with non-cacheable
-attributes such as dates or timestamps. It also tries to patch the *PROP_PRODUCT_VERSION* with the Jira ticket id,
-which must be provided as system property *JIRA_TICKET* - if it is not found, it won't be patched!
+attributes such as dates or timestamps. It also tries to patch the *PROP_PRODUCT_VERSION* with the ticket id, which must
+be provided as system property *TICKET_ID* - if it is not found, it won't be patched! It also tries to patch the
+*PROP_PRODUCT_VERSION* with the build id, which must be provided as system property *BUILD_ID* - if it is not found, it
+won't be patched!
 
 There is also the possibility to add specific manifest attributes only in the patched JAR / WAR archive artifacts. Such
 attributes must be set in the projects own gradle.properties file. Here another prefix must be used, "patched.manifest."

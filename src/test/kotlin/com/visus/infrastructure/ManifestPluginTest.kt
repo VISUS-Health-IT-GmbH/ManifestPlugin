@@ -108,10 +108,6 @@ open class ManifestPluginTest {
         private val projectBuildDir13    = File(projectProjectDir13, "build")
         private val projectLibsDir13     = File(projectBuildDir13, "libs")
 
-        private val projectProjectDir14  = File(buildDir, "${ManifestPluginTest::class.simpleName}_14")
-        private val projectBuildDir14    = File(projectProjectDir14, "build")
-        private val projectLibsDir14     = File(projectBuildDir14, "libs")
-
 
         /** 0) Create temporary directories for tests */
         @BeforeClass @JvmStatic fun configureTestsuite() {
@@ -119,7 +115,7 @@ open class ManifestPluginTest {
             listOf(
                 projectProjectDir1, projectProjectDir2, projectProjectDir3, projectProjectDir4, projectProjectDir5,
                 projectProjectDir6, projectProjectDir7, projectProjectDir8, projectProjectDir9, projectProjectDir10,
-                projectProjectDir11, projectProjectDir12, projectProjectDir13, projectProjectDir14
+                projectProjectDir11, projectProjectDir12, projectProjectDir13
             ).forEach { dir ->
                 if (dir.exists() && dir.isDirectory) {
                     Files.walk(dir.toPath())
@@ -133,7 +129,7 @@ open class ManifestPluginTest {
             listOf(
                 projectLibsDir1, projectLibsDir2, projectLibsDir3, projectLibsDir4, projectLibsDir5, projectLibsDir6,
                 projectLibsDir7, projectLibsDir8, projectLibsDir9, projectLibsDir10, projectLibsDir11, projectLibsDir12,
-                projectLibsDir13, projectLibsDir14
+                projectLibsDir13
             ).forEach { it.mkdirs() }
         }
     }
@@ -297,6 +293,9 @@ open class ManifestPluginTest {
         Assert.assertEquals(System.getProperty("user.name"), attributes[ManifestPlugin.PROP_BUILD_USER])
         Assert.assertTrue(attributes.containsKey(ManifestPlugin.PROP_BUILD_HOST))
         Assert.assertEquals(InetAddress.getLocalHost().hostName, attributes[ManifestPlugin.PROP_BUILD_HOST])
+        Assert.assertTrue(attributes.containsKey(ManifestPlugin.PROP_BUILD_DATE))
+        Assert.assertEquals(LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
+                            attributes[ManifestPlugin.PROP_BUILD_DATE])
         Assert.assertTrue(attributes.containsKey(ManifestPlugin.PROP_BUILD_TIME))
     }
 
@@ -399,11 +398,14 @@ open class ManifestPluginTest {
 
     /** 11) Evaluate applying the plugin, running JAR (but not WAR) task and patching all the artifacts afterwards */
     @Test fun test_Evaluate_PatchJarManifestAttributes() {
-        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir1).build()
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir1).build().also {
+            it.version = GradleVersion.current().version
+        }
 
         // emulate gradle.properties (should patch and some specific properties only available in patched archive)
         val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
         propertiesExtension.set(ManifestPlugin.KEY_PATCH, true)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
         propertiesExtension.set("${ManifestPlugin.PREFIX_PATCHED}Resources-Project-Version", "\${PROP_PRODUCT_VERSION}")
 
         restoreSystemProperties {
@@ -443,7 +445,7 @@ open class ManifestPluginTest {
 
     /** 12) Evaluate applying the plugin, running WAR (but not JAR) task but patching no version property */
     @Test fun test_Evaluate_PatchWarManifestAttributes() {
-        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir1).build()
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir2).build()
 
         // emulate gradle.properties (should patch and some specific properties only available in patched archive)
         val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
@@ -791,8 +793,8 @@ open class ManifestPluginTest {
 
 
     /** 20) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will not be patched as no version available */
-    /*@Test fun test_VISUS12_VersionNotAvailable() {
-        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir10).build()
+    @Test fun test_VISUS12_VersionNotAvailable() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir9).build()
 
         // emulate gradle.properties (should patch and some specific properties only available in patched archive)
         val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
@@ -827,7 +829,7 @@ open class ManifestPluginTest {
             content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
             Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}"))
         }
-    }*/
+    }
 
 
     /**
@@ -836,7 +838,7 @@ open class ManifestPluginTest {
      *      -> version available, manually set
      */
     @Test fun test_VISUS12_VersionCorrectlyPatchedBuildId() {
-        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir11).build().also {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir10).build().also {
             it.version = GradleVersion.current().version
         }
 
@@ -876,7 +878,7 @@ open class ManifestPluginTest {
             Assert.assertTrue(
                 content.contains(
                     "${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}." +
-                    "${System.getProperty(ManifestPlugin.SYS_TICKET)}." +
+                    "${System.getProperty(ManifestPlugin.SYS_TICKET)}-" +
                     System.getProperty(ManifestPlugin.SYS_BUILD)
                 )
             )
@@ -890,7 +892,7 @@ open class ManifestPluginTest {
      *      -> version available, manually set
      */
     @Test fun test_VISUS12_VersionWronglyPatchedBuildId() {
-        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir12).build().also {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir11).build().also {
             it.version = GradleVersion.current().version
         }
 
@@ -929,7 +931,7 @@ open class ManifestPluginTest {
             Assert.assertTrue(
                 content.contains(
                     "${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}." +
-                    "${System.getProperty(ManifestPlugin.SYS_TICKET)}." +
+                    "${System.getProperty(ManifestPlugin.SYS_TICKET)}-" +
                     System.getProperty(ManifestPlugin.SYS_BUILD)
                 )
             )
@@ -939,7 +941,7 @@ open class ManifestPluginTest {
 
     /** 23) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will not be patched if property strictly disabled (build id) */
     @Test fun test_VISUS12_VersionShouldNotBePatchedBuildId() {
-        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir13).build().also {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir12).build().also {
             it.version = GradleVersion.current().version
         }
 
@@ -982,8 +984,8 @@ open class ManifestPluginTest {
 
 
     /** 24) VISUS-12: Test that ${PROP_PRODUCT_VERSION} will not be patched as no version available (build id) */
-    /*@Test fun test_VISUS12_VersionNotAvailable() {
-        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir14).build()
+    @Test fun test_VISUS12_VersionNotAvailableBuildId() {
+        val project = ProjectBuilder.builder().withProjectDir(projectProjectDir13).build()
 
         // emulate gradle.properties (should patch and some specific properties only available in patched archive)
         val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
@@ -1018,7 +1020,7 @@ open class ManifestPluginTest {
             content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
             Assert.assertFalse(content.contains("${ManifestPlugin.PROP_PRODUCT_VERSION}: ${project.version}"))
         }
-    }*/
+    }
 }
 
 

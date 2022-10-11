@@ -126,14 +126,16 @@ open class JarExtensionTest {
         }
 
         // check not yet patched JAR archive artefact manifest file
-        var content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+        var content = project.file("${task.destinationDirectory.asFile.get()}/${task.archiveFileName.get()}")
+                        .getManifestFileContent()
         Assert.assertFalse(content.contains("Test123: Test456"))
 
         // emulate patching the JAR archive artifact
         task.patchManifest(mapOf("Test123" to "Test456"))
 
         // check patched JAR archive artefact manifest file
-        content = project.file("${project.buildDir}/libs/${task.archiveFileName.get()}").getManifestFileContent()
+        content = project.file("${task.destinationDirectory.asFile.get()}/${task.archiveFileName.get()}")
+                    .getManifestFileContent()
         Assert.assertTrue(content.contains("Test123: Test456"))
     }
 }

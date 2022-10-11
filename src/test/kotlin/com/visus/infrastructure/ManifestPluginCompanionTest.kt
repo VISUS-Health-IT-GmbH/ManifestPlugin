@@ -23,6 +23,8 @@ import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
 
+import com.github.stefanbirkner.systemlambda.SystemLambda.restoreSystemProperties
+
 
 /**
  *  ManifestPluginCompanionTest:
@@ -181,7 +183,7 @@ open class ManifestPluginCompanionTest {
         val project = ProjectBuilder.builder().build()
 
         val mapping = ManifestPlugin.getMapping(project)
-        Assert.assertEquals(12, mapping.size)
+        Assert.assertEquals(13, mapping.size)
         Assert.assertTrue(mapping.keys.contains(ManifestPlugin.GradleVersion))
         Assert.assertEquals(project.gradle.gradleVersion, mapping[ManifestPlugin.GradleVersion])
         Assert.assertTrue(mapping.keys.contains(ManifestPlugin.CreatedBy))
@@ -199,8 +201,8 @@ open class ManifestPluginCompanionTest {
         Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_RELEASE_DATE_yyMMdd))
         Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_BUILD_USER))
         Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_BUILD_HOST))
+        Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_BUILD_DATE))
         Assert.assertTrue(mapping.keys.contains(ManifestPlugin.PROP_BUILD_TIME))
-
     }
 
 
@@ -431,11 +433,149 @@ open class ManifestPluginCompanionTest {
         val mapping = mutableMapOf<String, Any>()
 
         ManifestPlugin.handleVersionEntry(ManifestPlugin.PROP_PRODUCT_VERSION, GradleVersion.current().version,
-            manifest, extension, mapping, gradleProperties)
+                                          manifest, extension, mapping, gradleProperties)
         Assert.assertTrue(manifest.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
         Assert.assertEquals("a.b.c", manifest[ManifestPlugin.PROP_PRODUCT_VERSION])
         Assert.assertFalse(gradleProperties.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
         Assert.assertTrue(mapping.containsKey(ManifestPlugin.PROP_PRODUCT_VERSION))
         Assert.assertEquals("a.b.c", mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 30) Check the "ManifestPlugin.patchVersionInMapping" method: Property for patching version not provided */
+    @Test fun test_VISUS13_patchVersionInMapping_noPropertyProvided() {
+        val project = ProjectBuilder.builder().build()
+        val mapping = ManifestPlugin.getMapping(project)
+
+        ManifestPlugin.patchVersionInMapping(project, mapping)
+
+        // mapping still equals project version, nothing changed
+        Assert.assertEquals(project.version as String, mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 31) Check the "ManifestPlugin.patchVersionInMapping" method: Property for patching version provided but false */
+    @Test fun test_VISUS13_patchVersionInMapping_propertyProvidedButFalse() {
+        val project = ProjectBuilder.builder().build()
+        val mapping = ManifestPlugin.getMapping(project)
+
+        // emulate gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, false)
+
+        ManifestPlugin.patchVersionInMapping(project, mapping)
+
+        // mapping still equals project version, nothing changed
+        Assert.assertEquals(project.version as String, mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 32) Check the "ManifestPlugin.patchVersionInMapping" method: project version "unspecified" */
+    @Test fun test_VISUS13_patchVersionInMapping_versionUnspecified() {
+        val project = ProjectBuilder.builder().build()
+        val mapping = ManifestPlugin.getMapping(project)
+
+        // emulate gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+
+        ManifestPlugin.patchVersionInMapping(project, mapping)
+
+        // mapping still equals project version, nothing changed
+        Assert.assertEquals(project.version as String, mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 33) Check the "ManifestPlugin.patchVersionInMapping" method: PROP_PRODUCT_RC missing (no sys properties) */
+    @Test fun test_VISUS13_patchVersionInMapping_PROP_PRODUCT_RCmissingButSoAreSysProperties() {
+        val project = ProjectBuilder.builder().build().also { it.version = GradleVersion.current().version }
+        val mapping = ManifestPlugin.getMapping(project)
+
+        // emulate gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+
+        ManifestPlugin.patchVersionInMapping(project, mapping)
+
+        // mapping still equals project version, nothing changed
+        Assert.assertEquals(project.version as String, mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 34) Check the "ManifestPlugin.patchVersionInMapping" method: PROP_PRODUCT_RC but no RC (no sys properties) */
+    @Test fun test_VISUS13_patchVersionInMapping_PROP_PRODUCT_RCfoundNoRCButSoAreSysProperties() {
+        val project = ProjectBuilder.builder().build().also { it.version = GradleVersion.current().version }
+        val mapping = ManifestPlugin.getMapping(project)
+
+        // emulate PROP_PRODUCT_RC
+        mapping[ManifestPlugin.PROP_PRODUCT_RC] = "RC01_build"
+
+        // emulate gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+
+        ManifestPlugin.patchVersionInMapping(project, mapping)
+
+        // mapping still equals project version, nothing changed
+        Assert.assertEquals(project.version as String, mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 35) Check the "ManifestPlugin.patchVersionInMapping" method: PROP_PRODUCT_RC and RC */
+    @Test fun test_VISUS13_patchVersionInMapping_PROP_PRODUCT_RCfoundCorrectRC() {
+        val project = ProjectBuilder.builder().build().also { it.version = GradleVersion.current().version }
+        val mapping = ManifestPlugin.getMapping(project)
+
+        // emulate PROP_PRODUCT_RC
+        mapping[ManifestPlugin.PROP_PRODUCT_RC] = "RC01"
+
+        // emulate gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+
+        ManifestPlugin.patchVersionInMapping(project, mapping)
+
+        // mapping still equals project version, nothing changed
+        Assert.assertEquals(project.version as String, mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+    }
+
+
+    /** 36) Check the "ManifestPlugin.patchVersionInMapping" method: SYS_TICKET set */
+    @Test fun test_VISUS13_patchVersionInMapping_ticketIdFound() {
+        val project = ProjectBuilder.builder().build().also { it.version = GradleVersion.current().version }
+        val mapping = ManifestPlugin.getMapping(project)
+
+        // emulate gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+
+        restoreSystemProperties {
+            System.setProperty(ManifestPlugin.SYS_TICKET, "JIRA-123")
+
+            ManifestPlugin.patchVersionInMapping(project, mapping)
+
+            // mapping has changed
+            Assert.assertEquals("${project.version as String}.JIRA-123", mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+        }
+    }
+
+
+    /** 37) Check the "ManifestPlugin.patchVersionInMapping" method: SYS_BUILD set */
+    @Test fun test_VISUS13_patchVersionInMapping_buildIdFound() {
+        val project = ProjectBuilder.builder().build().also { it.version = GradleVersion.current().version }
+        val mapping = ManifestPlugin.getMapping(project)
+
+        // emulate gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+
+        restoreSystemProperties {
+            System.setProperty(ManifestPlugin.SYS_BUILD, "123")
+
+            ManifestPlugin.patchVersionInMapping(project, mapping)
+
+            // mapping has changed
+            Assert.assertEquals("${project.version as String}-123", mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+        }
     }
 }

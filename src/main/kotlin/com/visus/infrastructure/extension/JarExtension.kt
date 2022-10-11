@@ -25,7 +25,7 @@ import com.visus.infrastructure.exception.JarPatchingFailedException
  */
 internal fun Jar.patchManifest(attributes: Map<String, String>) {
     // i) all necessary and reused variables
-    val jarDir = "${this.project.buildDir}/libs"
+    val jarDir = this.destinationDirectory.asFile.get().toString()
     val jarFileName = this.archiveFileName.get()
 
     // ii) don't patch if JAR archive does not exist

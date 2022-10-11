@@ -52,9 +52,8 @@ open class ManifestPlugin : Plugin<Project> {
         internal const val KEY_PATCH                                = "plugins.manifest.properties.patchArchives"
         internal const val KEY_VERSION                              = "plugins.manifest.properties.patchVersion"
 
-        // system property used for patching PROP_PRODUCT_VERSION (currently Jira tickets only + build id)
-        // TODO: Rename to "TICKET_ID"!
-        internal const val SYS_TICKET                               = "JIRA_TICKET"
+        // system property used for patching PROP_PRODUCT_VERSION (currently ticket / build id only)
+        internal const val SYS_TICKET                               = "TICKET_ID"
         internal const val SYS_BUILD                                = "BUILD_ID"
 
         // task name for patching archive artifacts
@@ -79,6 +78,7 @@ open class ManifestPlugin : Plugin<Project> {
         internal const val PROP_VENDOR_NAME                         = "PROP_VENDOR_NAME"
         internal const val PROP_RELEASE_DATE                        = "PROP_RELEASE_DATE"
         internal const val PROP_RELEASE_DATE_yyMMdd                 = "PROP_RELEASE_DATE_yyMMdd"
+        internal const val PROP_BUILD_DATE                          = "PROP_BUILD_DATE"
         internal const val PROP_BUILD_TIME                          = "PROP_BUILD_TIME"
         internal const val PROP_BUILD_USER                          = "PROP_BUILD_USER"
         internal const val PROP_BUILD_HOST                          = "PROP_BUILD_HOST"
@@ -188,7 +188,8 @@ open class ManifestPlugin : Plugin<Project> {
             PROP_RELEASE_DATE_yyMMdd to LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd")),
             PROP_BUILD_USER to System.getProperty("user.name"),
             PROP_BUILD_HOST to InetAddress.getLocalHost().hostName,
-            PROP_BUILD_TIME to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME)
+            PROP_BUILD_DATE to LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
+            PROP_BUILD_TIME to LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
         )
 
 
@@ -308,7 +309,7 @@ open class ManifestPlugin : Plugin<Project> {
 
                 // versionAvailable = false / not in gradle.properties: use project.version (only when correct)
                 !gradleProperties.containsKey(this) && version.toString().isNotBlank()
-                        && !version.toString().contains("unspecified") -> run {
+                        && !version.toString().contains(Project.DEFAULT_VERSION) -> run {
                     manifest[this] = version as String
                     mapping[this] = version
                 }
@@ -318,6 +319,45 @@ open class ManifestPlugin : Plugin<Project> {
 
             // remove version from gradle.properties
             gradleProperties.remove(this)
+        }
+
+
+        /**
+         *  Tries to patch the PROP_PRODUCT_VERSION entry in the mapping if required and
+         *
+         *  @param target the Gradle project to search for Gradle / system properties
+         *  @param mapping the mapping containing PROP_PRODUCT_VERSION
+         *
+         *  INFO: The "PROP_PRODUCT_VERSION" entry in mapping is either target.version (which can be "unspecified") or
+         *        set by handleVersionEntry(...) using something else (this requires handleVersionEntry(...) to be
+         *        called before this method).
+         */
+        internal fun patchVersionInMapping(target: Project, mapping: MutableMap<String, Any>) {
+            // Patching is not necessary, when:
+            // - property to patch version is not available
+            // - property to patch version is available and not set to true
+            // - PROP_PRODUCT_VERSION in mapping contains "unspecified" -> version missing
+            // - PROP_PRODUCT_RC is available and is of scheme "RCxy"
+            if (!target.properties.containsKey(KEY_VERSION)
+                || (target.properties.containsKey(KEY_VERSION) && !target.properties[KEY_VERSION]!!.isTrue())
+                || (mapping[PROP_PRODUCT_VERSION] as String).contains(Project.DEFAULT_VERSION)
+                || (PROP_PRODUCT_RC in mapping && Regex(""""RC\d\d""").matches(mapping[PROP_PRODUCT_RC] as String))) {
+                return
+            }
+
+            // check for ticket id, result: PROP_PRODUCT_VERSION = PROP_PRODUCT_VERSION.SYS_TICKET
+            if (target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().isPresent) {
+                mapping[PROP_PRODUCT_VERSION] = "${mapping[PROP_PRODUCT_VERSION]}." +
+                        target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().get()
+            }
+
+            // check for build id, result:
+            // *) PROP_PRODUCT_VERSION = PROP_PRODUCT_VERSION.SYS_TICKET-SYS_BUILD
+            // *) PROP_PRODUCT_VERSION = PROP_PRODUCT_VERSION-SYS_BUILD
+            if (target.providers.systemProperty(SYS_BUILD).forUseAtConfigurationTime().isPresent) {
+                mapping[PROP_PRODUCT_VERSION] = "${mapping[PROP_PRODUCT_VERSION]}-" +
+                        target.providers.systemProperty(SYS_BUILD).forUseAtConfigurationTime().get()
+            }
         }
     }
 
@@ -333,16 +373,15 @@ open class ManifestPlugin : Plugin<Project> {
         }
         val warPluginFound = target.plugins.hasPlugin(WarPlugin::class.java)
 
-        // 2) Get (root) project extension if available & mapping
-        //    INFO: Should be moved to "afterEvaluate" block, maybe tests must be fixed!
-        val extension = getExtension(target)
-        val mappings = getMapping(target)
-
         target.afterEvaluate {
+            // 2) Get (root) project extension if available & mapping
+            val extension = getExtension(target)
+            val mappings = getMapping(target)
+
             // all properties starting with "manifest."
             val manifestGradleProperties = target.properties.filter { it.key.startsWith(PREFIX_DEFAULT) }
-                                            .mapKeys { it.key.replace(PREFIX_DEFAULT, "") }
-                                            .toMutableMap()
+                .mapKeys { it.key.replace(PREFIX_DEFAULT, "") }
+                .toMutableMap()
             val manifest: MutableMap<String, String> = mutableMapOf()
 
             // 3) Get all tasks based on WAR plugin applied -> there is at least one JAR task after applying Java plugin
@@ -373,7 +412,8 @@ open class ManifestPlugin : Plugin<Project> {
             if (manifest.containsKey(PROP_PRODUCT_RELEASED)
                 && manifest[PROP_PRODUCT_RELEASED].equals("true", ignoreCase = true)) {
                 listOf(
-                    PROP_RELEASE_DATE, PROP_RELEASE_DATE_yyMMdd, PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME
+                    PROP_RELEASE_DATE, PROP_RELEASE_DATE_yyMMdd, PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_DATE,
+                    PROP_BUILD_TIME
                 ).forEach {
                     handleEasyEntry(it, mappings[it]!! as String, manifest, manifestGradleProperties)
                 }
@@ -403,25 +443,17 @@ open class ManifestPlugin : Plugin<Project> {
                 val patchedManifestGradleProperties = target.properties.filter { it.key.startsWith(PREFIX_PATCHED) }
                                                         .mapKeys { it.key.replace(PREFIX_PATCHED, "") }
                                                         .toMutableMap()
-                val patchedManifest: MutableMap<String, String> = mutableMapOf();
+                val patchedManifest: MutableMap<String, String> = mutableMapOf()
 
-                // INFO: Patching "PROP_PRODUCT_VERSION" using Jira ticket id if found
-                if (target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().isPresent) {
-                    mappings[PROP_PRODUCT_VERSION] = "${mappings[PROP_PRODUCT_VERSION]}." +
-                            target.providers.systemProperty(SYS_TICKET).forUseAtConfigurationTime().get()
-                }
-                // INFO: Patching "PROP_PRODUCT_VERSION" using build id if found
-                if (target.providers.systemProperty(SYS_BUILD).forUseAtConfigurationTime().isPresent) {
-                    mappings[PROP_PRODUCT_VERSION] = "${mappings[PROP_PRODUCT_VERSION]}." +
-                            target.providers.systemProperty(SYS_BUILD).forUseAtConfigurationTime().get()
-                }
-
-                // TODO: Handle "unspecified" (Project.DEFAULT_VERSION)!
-                if (target.properties.containsKey(KEY_VERSION) && target.properties[KEY_VERSION]!!.isTrue()) {
+                // Patch version only property enables it and RC is of schme "RCxy":
+                // -> PROP_PRODUCT_RC == RCxy -> PROP_PRODUCT_RELEASED = true
+                patchVersionInMapping(target, mappings)
+                if (target.properties.containsKey(KEY_VERSION) && target.properties[KEY_VERSION]!!.isTrue()
+                    && !(mappings[PROP_PRODUCT_VERSION] as String).contains(Project.DEFAULT_VERSION)) {
                     patchedManifest[PROP_PRODUCT_VERSION] = mappings[PROP_PRODUCT_VERSION] as String
                 }
 
-                listOf(PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_TIME).forEach {
+                listOf(PROP_BUILD_USER, PROP_BUILD_HOST, PROP_BUILD_DATE, PROP_BUILD_TIME).forEach {
                     handleEasyEntry(it, mappings[it]!! as String, patchedManifest, patchedManifestGradleProperties)
                 }
                 patchedManifestGradleProperties.forEach { when {
