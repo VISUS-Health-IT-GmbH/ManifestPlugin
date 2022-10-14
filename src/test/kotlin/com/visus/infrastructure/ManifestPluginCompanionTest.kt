@@ -578,4 +578,28 @@ open class ManifestPluginCompanionTest {
             Assert.assertEquals("${project.version as String}-123", mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
         }
     }
+
+
+    /** 38) Check the "ManifestPlugin.patchVersionInMapping" method: Test abnormality, version should not be patched
+                                                                     when it is a valid RC build! */
+    @Test fun test_VISUS13_patchVersionInMapping_RCCorrectAndTicketIdBuildIdFound() {
+        val project = ProjectBuilder.builder().build().also { it.version = GradleVersion.current().version }
+        val mapping = ManifestPlugin.getMapping(project)
+
+        mapping[ManifestPlugin.PROP_PRODUCT_RC] = "RC01"
+
+        // emulate gradle.properties
+        val propertiesExtension = project.extensions.getByType(ExtraPropertiesExtension::class.java)
+        propertiesExtension.set(ManifestPlugin.KEY_VERSION, true)
+
+        restoreSystemProperties {
+            System.setProperty(ManifestPlugin.SYS_TICKET, "JIRA-123")
+            System.setProperty(ManifestPlugin.SYS_BUILD, "123")
+
+            ManifestPlugin.patchVersionInMapping(project, mapping)
+
+            // mapping should not have changed
+            Assert.assertEquals(project.version as String, mapping[ManifestPlugin.PROP_PRODUCT_VERSION])
+        }
+    }
 }

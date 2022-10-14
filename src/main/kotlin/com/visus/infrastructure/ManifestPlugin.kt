@@ -341,7 +341,7 @@ open class ManifestPlugin : Plugin<Project> {
             if (!target.properties.containsKey(KEY_VERSION)
                 || (target.properties.containsKey(KEY_VERSION) && !target.properties[KEY_VERSION]!!.isTrue())
                 || (mapping[PROP_PRODUCT_VERSION] as String).contains(Project.DEFAULT_VERSION)
-                || (PROP_PRODUCT_RC in mapping && Regex(""""RC\d\d""").matches(mapping[PROP_PRODUCT_RC] as String))) {
+                || (PROP_PRODUCT_RC in mapping && Regex("""RC\d\d""").matches(mapping[PROP_PRODUCT_RC] as String))) {
                 return
             }
 
